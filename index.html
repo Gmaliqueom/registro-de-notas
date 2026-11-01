@@ -194,6 +194,10 @@ body.is-settings .intro,body.is-console .intro{display:none}
 .logrow.flash{animation:flash 1600ms var(--ease-out)}
 @keyframes flash{from{background-color:var(--accent-soft)}}
 .steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--ink-2)}
+.cart-text{width:100%;min-height:110px;resize:vertical;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;padding:10px 12px}
+.imp-row.cart{grid-template-columns:72px 1fr auto}
+.imp-row.cart .imp-n small{display:block;color:var(--muted);font-size:12px}
+.imp-row .tag{font-style:normal;font-size:11px;color:var(--ambar);margin-left:6px}
 .intro-sub{margin:-8px 2px 0;color:var(--muted);font-size:14px}
 .intro-sub:empty{display:none}
 .mencion-pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;width:100%}
@@ -210,6 +214,11 @@ body.is-settings .intro,body.is-console .intro{display:none}
 .login > .btn.plain{align-self:flex-start}
 body.is-login .intro,body.is-login .top-tabs,body.is-login #gear,body.is-login #sidebtn{display:none!important}
 code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.9em;background:var(--fill);padding:1px 5px;border-radius:5px}
+.final-card{padding:16px}
+.fc-top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 18px}
+.fc-txt{flex:1 1 260px;min-width:0}
+.fc-gr{width:130px;flex:none}
+.comps.unused{opacity:.45}
 .trash{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .trash > .group{align-self:stretch}
 .log-empty{padding:16px;font-size:14px;color:var(--muted)}
@@ -769,7 +778,16 @@ function okAt(c, x) {
   const pepFail = pepFailAt(c, x);
   return { ok: fr >= c.pass - 1e-9 && !fails.length && !pepFail, fr, raw: f.final, fails, pepFail, exempt: f.exempt };
 }
+// ramos de semestres ya pasados: se puede escribir solo la nota final; las evaluaciones quedan guardadas sin usarse
+const isPastSem = c => (c.semester || '') < currentSem();
+const isDirect = c => c.finalGrade != null && !c.historic && isPastSem(c);
 function analyze(c) {
+  if (isDirect(c)) {
+    const raw = c.finalGrade, fr = c.round ? r1(raw) : raw;
+    const avgs = {}; c.components.forEach(k => { avgs[k.id] = compAvg(k, null); });
+    const end = { ok: fr >= c.pass - 1e-9, fr, raw, fails: [], pepFail: false, exempt: false };
+    return { direct: true, total: 1, entered: 1, pending: 0, presAllIn: true, pres: raw, dropped: new Set(), avgs, definitive: true, exemptNow: false, examPending: false, end, show: fr, partial: false };
+  }
   const rnd = v => c.round ? r1(v) : v;
   let total = 0, entered = 0; const dropped = new Set(), avgs = {};
   for (const k of c.components) {
@@ -928,9 +946,9 @@ function settingsHTML() {
       <button role="tab" aria-selected="${tab === 'malla'}" data-act="set-tab" data-tab="malla">Actualizar malla</button>
       <button role="tab" aria-selected="${tab === 'electivos'}" data-act="set-tab" data-tab="electivos">Actualizar electivos</button>
       <button role="tab" aria-selected="${tab === 'temas'}" data-act="set-tab" data-tab="temas">Temas</button>
-      <button role="tab" aria-selected="${tab === 'respaldo'}" data-act="set-tab" data-tab="respaldo">Respaldo</button>
+      <button role="tab" aria-selected="${tab === 'respaldo'}" data-act="set-tab" data-tab="respaldo">Mis datos</button>
     </div>
-    ${tab === 'temas' ? temasHTML() : tab === 'respaldo' ? respaldoHTML() : impHTML(tab) + (tab === 'malla' ? mallaHTML() : electivosHTML())}
+    ${tab === 'temas' ? temasHTML() : tab === 'respaldo' ? impHTML('cartola') + respaldoHTML() : impHTML(tab) + (tab === 'malla' ? mallaHTML() : electivosHTML())}
   </section>`;
 }
 function mallaHTML() {
@@ -1004,6 +1022,7 @@ function evalSlots(c) {
   });
   if (c.exam.enabled) out.push({ key: 'exam', label: 'Examen', value: c.exam.value });
   if (analyze(c).suf) out.push({ key: 'suf', label: 'Examen de suficiencia', value: c.suf?.value ?? null });
+  if (isPastSem(c)) out.unshift({ key: 'final', label: 'Nota final del ramo', value: c.finalGrade ?? null });
   return out;
 }
 function conState() {
@@ -1086,6 +1105,7 @@ function conSubmit() {
   let prev = null, gid = 'exam', label = slot.label;
   if (slot.key === 'exam') { prev = c.exam.value; c.exam.value = p.v; }
   else if (slot.key === 'suf') { prev = c.suf?.value ?? null; c.suf = { value: p.v }; gid = 'suf'; }
+  else if (slot.key === 'final') { prev = c.finalGrade ?? null; c.finalGrade = p.v; gid = 'final'; }
   else {
     const [kid, id] = slot.key.split('|'); const k = findComp(c, kid); if (!k) return;
     let g;
@@ -1106,6 +1126,7 @@ function conRedo(id) {
   let done = false;
   if (e.gid === 'exam') { if (c.exam.value === e.prev) { c.exam.value = e.v; done = true; } }
   else if (e.gid === 'suf') { if ((c.suf?.value ?? null) === e.prev) { c.suf = { value: e.v }; done = true; } }
+  else if (e.gid === 'final') { if ((c.finalGrade ?? null) === e.prev) { c.finalGrade = e.v; done = true; } }
   else for (const k of c.components) { const g = k.grades.find(x => x.id === e.gid); if (g && g.value === e.prev) { g.value = e.v; done = true; } }
   if (!done) { toast('Esa evaluación cambió después; no restauré la nota.'); return; }
   state.meta.log = state.meta.log.map(x => x.id === id ? Object.assign({}, x, { undone: false, undoneAt: null }) : x);
@@ -1117,6 +1138,7 @@ function conUndo(id) {
   const c = state.courses.find(x => x.id === e.cid); if (!c) return;
   if (e.gid === 'exam') { if (c.exam.value === e.v) c.exam.value = e.prev; }
   else if (e.gid === 'suf') { if ((c.suf?.value ?? null) === e.v) c.suf = { value: e.prev }; }
+  else if (e.gid === 'final') { if ((c.finalGrade ?? null) === e.v) c.finalGrade = e.prev; }
   else { for (const k of c.components) { const g = k.grades.find(x => x.id === e.gid); if (g && g.value === e.v) g.value = e.prev; } }
   state.meta.log = state.meta.log.map(x => x.id === id ? Object.assign({}, x, { undone: true, undoneAt: Date.now() }) : x);
   toast('Nota deshecha. Quedó en la papelera.');
@@ -1144,13 +1166,15 @@ async function initSampler() {
 }
 function impHTML(tab) {
   const imp = state.imp && state.imp.tab === tab ? state.imp : null;
-  const canPhoto = !!(sampler && samplerImages);
+  const canPhoto = canPhotoNow();
   const what = tab === 'malla' ? 'la malla' : 'los electivos';
+  if (tab === 'cartola') return cartolaImpHTML(imp, canPhoto);
   let body = '';
   if (imp?.status === 'reading') body = `<div class="imp-status" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(imp.msg)}</span><button class="btn plain small" data-act="imp-stop">Detener</button></div>`;
   else if (imp?.status === 'error') body = `<div class="imp-status err" role="alert">${esc(imp.msg)}</div>`;
   else if (imp?.status === 'ok') body = `<div class="imp-status ok" role="status">${esc(imp.msg)}</div>`;
   else if (imp?.status === 'review') body = tab === 'malla' ? mallaReviewHTML(imp) : elecReviewHTML(imp);
+  const multi = sampler && samplerImages ? (samplerImages.maxCount || 1) > 1 : true;
   const busy = imp?.status === 'reading' ? 'disabled' : '';
   return `<div class="card imp">
     <div><div class="imp-title">Actualizar ${what} automáticamente</div>
@@ -1160,10 +1184,40 @@ function impHTML(tab) {
     <div class="imp-actions">
       <button class="btn primary small" data-act="imp-photo" ${canPhoto && !busy ? '' : 'disabled'}>Subir foto</button>
       <button class="btn tinted small" data-act="imp-file" ${busy}>Subir Excel o documento</button>
-      <input type="file" id="imp-photo-in" accept="${esc((samplerImages?.mediaTypes || ['image/jpeg', 'image/png', 'image/webp']).join(','))}" ${(samplerImages?.maxCount || 1) > 1 ? 'multiple' : ''} hidden>
+      <input type="file" id="imp-photo-in" accept="${esc((samplerImages?.mediaTypes || ['image/jpeg', 'image/png', 'image/webp']).join(','))}" ${multi ? 'multiple' : ''} hidden>
       <input type="file" id="imp-file-in" accept=".xlsx,.xls,.csv,.txt,.md,.docx" hidden>
     </div>
-    ${canPhoto ? '' : `<div class="cap">${sampler ? 'Leer fotos no está disponible aquí.' : 'Leer fotos y documentos necesita que la app pueda usar Claude, y eso no está disponible aquí.'} Un Excel o CSV con columnas ${tab === 'malla' ? 'Nivel, Código, Nombre y SCT' : 'con los nombres'} funciona igual.</div>`}
+    ${canPhoto ? '' : `<div class="cap">${noPhotoWhy()} Un Excel o CSV con columnas ${tab === 'malla' ? 'Nivel, Código, Nombre y SCT' : 'con los nombres'} funciona igual.</div>`}
+    ${body}
+  </div>`;
+}
+const impTab = () => state.tab === 'respaldo' ? 'cartola' : (state.tab || 'malla');
+function noPhotoWhy() {
+  if (sampler) return 'Leer fotos no está disponible aquí.';
+  if (API && remote.user) return remote.ia === undefined ? 'Revisando si la lectura de fotos está activa…' : 'La lectura de fotos aún no está activada en el puente (falta la clave de Gemini).';
+  return 'Leer fotos necesita la versión en línea de la app o Claude.';
+}
+function cartolaImpHTML(imp, canPhoto) {
+  let body = '';
+  if (imp?.status === 'reading') body = `<div class="imp-status" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(imp.msg)}</span><button class="btn plain small" data-act="imp-stop">Detener</button></div>`;
+  else if (imp?.status === 'error') body = `<div class="imp-status err" role="alert">${esc(imp.msg)}</div>`;
+  else if (imp?.status === 'ok') body = `<div class="imp-status ok" role="status">${esc(imp.msg)}</div>`;
+  else if (imp?.status === 'review') body = cartolaReviewHTML(imp);
+  const busy = imp?.status === 'reading' ? 'disabled' : '';
+  const multi = sampler && samplerImages ? (samplerImages.maxCount || 1) > 1 : true;
+  return `<div class="card imp" id="cartola-card">
+    <div><div class="imp-title">Cargar notas desde la cartola</div>
+      <div class="cap">Se crean solos los ramos de semestres anteriores con su nota final, y se actualizan los que ya tenías. Antes de guardar ves la lista para revisarla.</div></div>
+    <ol class="steps"><li>Entra al portal de la universidad y abre tu <b>cartola de notas</b> (o concentración de notas).</li><li>Selecciona la tabla completa, cópiala y pégala aquí abajo. ${canPhoto ? 'También puedes subir una captura o foto.' : ''}</li></ol>
+    <textarea id="cart-text" class="field cart-text" rows="5" placeholder="1/2026   Finanzas I   6   4.5   A" ${busy}></textarea>
+    <div class="imp-actions">
+      <button class="btn primary small" data-act="imp-paste" ${busy}>Leer texto pegado</button>
+      <button class="btn tinted small" data-act="imp-photo" ${canPhoto && !busy ? '' : 'disabled'}>Subir foto o captura</button>
+      <button class="btn small" data-act="imp-file" ${busy}>Subir Excel o documento</button>
+      <input type="file" id="imp-photo-in" accept="${esc((samplerImages?.mediaTypes || ['image/jpeg', 'image/png', 'image/webp']).join(','))}" ${multi ? 'multiple' : ''} hidden>
+      <input type="file" id="imp-file-in" accept=".xlsx,.xls,.csv,.txt,.md,.docx" hidden>
+    </div>
+    ${canPhoto ? '' : `<div class="cap">${noPhotoWhy()} Pegar el texto funciona igual.</div>`}
     ${body}
   </div>`;
 }
@@ -1172,13 +1226,16 @@ function impErr(e) {
     not_granted: 'La app no tiene permiso para usar Claude, así que no puede leer fotos ni documentos. Recarga la página si quieres permitirlo, o sube un Excel con columnas.',
     sampling_disabled: 'La lectura automática no está disponible en esta cuenta. Sube un Excel o CSV con columnas.',
     images_unavailable: 'Leer fotos no está disponible aquí. Sube un Excel o CSV con columnas.',
-    rate_limited: 'Llegaste al límite de uso de Claude por ahora. Intenta de nuevo más tarde.',
+    rate_limited: 'Llegaste al límite de lecturas automáticas por ahora. Intenta de nuevo en unos minutos.',
     image_rejected: 'No pude abrir esa imagen. Prueba con una foto JPG o PNG más nítida.',
     refused: 'Claude no pudo procesar ese archivo. Prueba con otra foto o archivo.',
     prompt_too_large: 'El archivo es demasiado largo. Deja solo la tabla de ramos e intenta de nuevo.',
     formato: 'No puedo leer ese tipo de archivo. Usa una foto, un Excel (.xlsx), un CSV, un Word (.docx) o un .txt.',
-    noai: 'Para leer documentos de texto la app necesita usar Claude, y eso no está disponible aquí. Sube un Excel o CSV con columnas.',
+    noai: 'La lectura automática no está activa aquí. Sube un Excel o CSV con columnas.',
     lib: 'No se pudo cargar el lector de archivos. Revisa tu conexión e intenta de nuevo.',
+    red: 'No hay conexión con el puente. Revisa tu internet e intenta de nuevo.',
+    ia: 'La lectura automática tuvo un problema. Prueba con una foto más nítida o pega el texto.',
+    'nada-cartola': 'No encontré notas en lo que pegaste. Copia la tabla completa de la cartola, incluida la columna del semestre (por ejemplo 1/2026).',
     nada: 'No encontré ramos en lo que subiste. Prueba con una foto más nítida o un Excel con columnas Nivel, Código, Nombre y SCT.'
   };
   const code = e?.code;
@@ -1193,38 +1250,75 @@ async function runImport(tab, kind, files) {
   render();
   try {
     const items = kind === 'photo'
-      ? await aiExtract(tab, { images: files.slice(0, samplerImages?.maxCount || 1) }, ctl.signal)
+      ? await aiExtract(tab, { images: files.slice(0, photoMax()) }, ctl.signal)
       : await fileExtract(tab, files[0], ctl.signal);
-    if (!items || !items.length) throw { code: 'nada' };
-    const result = tab === 'malla' ? diffMalla(items) : diffElec(items);
+    if (!items || !items.length) throw { code: tab === 'cartola' ? 'nada-cartola' : 'nada' };
+    const result = tab === 'malla' ? diffMalla(items) : tab === 'cartola' ? diffCartola(items) : diffElec(items);
     if (tab === 'malla' && !result.rows.length) throw { code: 'nada' };
+    if (tab === 'cartola' && !result.rows.length && !result.skipped.length) throw { code: 'nada-cartola' };
     state.imp = { tab, status: 'review', result, removeMissing: true };
   } catch (e) {
     state.imp = e?.code === 'cancelled' ? null : { tab, status: 'error', msg: impErr(e) };
   }
   if (state.view === 'settings') render();
 }
-async function aiExtract(tab, src, signal) {
-  if (!sampler) throw { code: 'noai' };
-  const intro = src.images ? 'Te paso una o más fotos' : 'Te paso el contenido de un archivo';
-  const prompt = tab === 'malla'
-    ? `${intro} de la malla curricular de una carrera universitaria chilena. Extrae TODOS los ramos que aparecen.
+/* ---------- lectura automática: con Claude (en Claude) o con Gemini a través del puente (versión independiente) ---------- */
+const hasAI = () => !!sampler || !!(API && remote.user && remote.ia);
+const canPhotoNow = () => !!(sampler && samplerImages) || !!(API && remote.user && remote.ia);
+const photoMax = () => sampler && samplerImages ? (samplerImages.maxCount || 1) : 3;
+const PROMPTS = {
+  malla: intro => `${intro} de la malla curricular de una carrera universitaria chilena. Extrae TODOS los ramos que aparecen.
 Responde solo con un arreglo JSON de objetos con esta forma:
 [{"nivel": 1, "codigo": "352401", "nombre": "Contabilidad General", "sct": 6}]
 - "nivel": número entero del nivel o semestre de la malla (en una foto de malla, cada columna suele ser un nivel).
 - "codigo": el código del ramo como texto, o null si no aparece.
 - "nombre": el nombre del ramo tal como está escrito, uniendo las palabras cortadas en varias líneas.
 - "sct": los créditos SCT como número (por ejemplo de "SCT:5"), o null si no aparecen.
-No incluyas requisitos, horas ni colores, y no inventes ramos.`
-    : `${intro} con los cursos electivos que va a tomar un estudiante universitario. Extrae los nombres de esos electivos en el orden en que aparecen.
+No incluyas requisitos, horas ni colores, y no inventes ramos.`,
+  electivos: intro => `${intro} con los cursos electivos que va a tomar un estudiante universitario. Extrae los nombres de esos electivos en el orden en que aparecen.
 Responde solo con un arreglo JSON de objetos con esta forma:
 [{"nombre": "Neuromarketing", "nivel": 9, "sct": 6}]
-"nivel" y "sct" son números, o null si no aparecen. No incluyas nombres genéricos como "Electivo Especialidad I" y no inventes cursos.`;
-  const input = src.text != null ? `${prompt}\n\nContenido del archivo:\n${String(src.text).slice(0, 60000)}` : prompt;
-  const opts = { signal };
-  if (src.images) opts.images = src.images;
-  const data = await sampler.json(input, opts);
-  return Array.isArray(data) ? data : Array.isArray(data?.ramos) ? data.ramos : Array.isArray(data?.electivos) ? data.electivos : [];
+"nivel" y "sct" son números, o null si no aparecen. No incluyas nombres genéricos como "Electivo Especialidad I" y no inventes cursos.`,
+  cartola: intro => `${intro} de la cartola de notas de un estudiante universitario chileno. Extrae TODAS las filas de ramos.
+Responde solo con un arreglo JSON de objetos con esta forma:
+[{"semestre": "2026-01", "codigo": "352421", "ramo": "Finanzas I", "nota": 4.5, "situacion": "A"}]
+- "semestre": convierte "1/2026" en "2026-01" y "2/2025" en "2025-02". Si una fila no muestra semestre, usa el de la fila anterior.
+- "codigo": el código de la asignatura como texto, o null si no aparece.
+- "ramo": el nombre de la asignatura tal como aparece.
+- "nota": la nota final como número con punto decimal.
+- "situacion": "A" si aprobó, "R" si reprobó, o null.
+No inventes filas.`
+};
+// achica la foto antes de enviarla (máx. 1600 px, JPEG) para que viaje rápido
+async function toJpegBase64(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+    const cv = document.createElement('canvas'); cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+    return cv.toDataURL('image/jpeg', 0.85).split(',')[1];
+  } finally { URL.revokeObjectURL(url); }
+}
+async function aiExtract(tab, src, signal) {
+  const intro = src.images ? 'Te paso una o más fotos' : 'Te paso el contenido de un archivo';
+  const prompt = (PROMPTS[tab] || PROMPTS.malla)(intro);
+  const pick = data => Array.isArray(data) ? data : Array.isArray(data?.ramos) ? data.ramos : Array.isArray(data?.electivos) ? data.electivos : Array.isArray(data?.filas) ? data.filas : [];
+  if (sampler) {
+    const input = src.text != null ? `${prompt}\n\nContenido del archivo:\n${String(src.text).slice(0, 60000)}` : prompt;
+    const opts = { signal };
+    if (src.images) opts.images = src.images;
+    return pick(await sampler.json(input, opts));
+  }
+  if (API && remote.user && remote.ia) {
+    const images = src.images ? await Promise.all([...src.images].slice(0, 3).map(async f => ({ mime: 'image/jpeg', data: await toJpegBase64(f) }))) : undefined;
+    let r;
+    try { r = await api('leer', { user: remote.user, pin: remote.pin, kind: tab, prompt, text: src.text != null ? String(src.text).slice(0, 60000) : undefined, images }, signal); }
+    catch (e) { if (e?.name === 'AbortError') throw { code: 'cancelled' }; throw { code: 'red' }; }
+    if (!r.ok) throw { code: r.error === 'sin-ia' ? 'noai' : r.error === 'limite' ? 'rate_limited' : 'ia' };
+    return pick(r.items);
+  }
+  throw { code: 'noai' };
 }
 async function fileExtract(tab, file, signal) {
   const name = (file.name || '').toLowerCase();
@@ -1232,24 +1326,129 @@ async function fileExtract(tab, file, signal) {
     const XLSX = await loadLib(XLSX_URL, 'XLSX');
     const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
     const rows = wb.SheetNames.flatMap(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: '' }));
-    const direct = tab === 'malla' ? rowsToMalla(rows) : rowsToElec(rows);
+    const direct = tab === 'malla' ? rowsToMalla(rows) : tab === 'cartola' ? parseCartolaText(rows.map(r => r.join('\t')).join('\n')) : rowsToElec(rows);
     if (direct.length) return direct;
-    if (!sampler) throw { code: 'nada' };
+    if (!hasAI()) throw { code: 'nada' };
     return aiExtract(tab, { text: rows.map(r => r.join(' | ')).join('\n') }, signal);
   }
-  if (/\.docx$/.test(name)) {
-    const mammoth = await loadLib(MAMMOTH_URL, 'mammoth');
-    const { value } = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
-    if (!sampler) { if (tab === 'electivos') return linesToElec(value); throw { code: 'noai' }; }
-    return aiExtract(tab, { text: value }, signal);
-  }
-  if (/\.(txt|md)$/.test(name) || (file.type || '').startsWith('text/')) {
-    const text = await file.text();
-    if (!sampler) { if (tab === 'electivos') return linesToElec(text); throw { code: 'noai' }; }
+  let text = null;
+  if (/\.docx$/.test(name)) { const mammoth = await loadLib(MAMMOTH_URL, 'mammoth'); text = (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value; }
+  else if (/\.(txt|md)$/.test(name) || (file.type || '').startsWith('text/')) text = await file.text();
+  if (text != null) {
+    if (tab === 'cartola') { const d = parseCartolaText(text); if (d.length) return d; }
+    if (!hasAI()) { if (tab === 'electivos') return linesToElec(text); throw { code: tab === 'cartola' ? 'nada' : 'noai' }; }
     return aiExtract(tab, { text }, signal);
   }
   if ((file.type || '').startsWith('image/')) return aiExtract(tab, { images: [file] }, signal);
   throw { code: 'formato' };
+}
+/* ---------- cartola: notas finales de semestres anteriores ---------- */
+// lee la tabla copiada del portal: "1/2026  Finanzas I  6  4.5  A" (columnas con tabulaciones o espacios, en cualquier orden)
+function parseCartolaText(text) {
+  const out = []; let sem = null;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    let line = raw.replace(/\u00a0/g, ' ').replace(/\s+$/, ''); if (!line.trim()) continue;
+    let ms = line.match(/(^|\s)([12])\s*[\/\-]\s*(20\d{2})(?=\s|$)/), lineSem = null;
+    if (ms) lineSem = `${ms[3]}-0${ms[2]}`;
+    else if ((ms = line.match(/(^|\s)(20\d{2})\s*[\/\-]\s*0?([12])(?=\s|$)/))) lineSem = `${ms[2]}-0${ms[3]}`;
+    if (ms) { line = line.slice(0, ms.index) + ms[1] + ' '.repeat(ms[0].length - ms[1].length) + line.slice(ms.index + ms[0].length); sem = lineSem; }
+    const grades = [...line.matchAll(/(^|\s)([1-7][.,]\d{1,2})(?=\s|$)/g)];
+    if (!grades.length || !sem) continue;
+    const g = grades[grades.length - 1], at = g.index + g[1].length;
+    const nota = Number(g[2].replace(',', '.'));
+    const after = line.slice(at + g[2].length);
+    const sm = after.match(/^\s*(aprobad[oa]|reprobad[oa]|A|R)(?=\s|$)/i);
+    const situacion = sm ? sm[1][0].toUpperCase() : null;
+    const before = line.slice(0, at);
+    let cells = before.split(/\t|\s{2,}|\|/).map(x => x.trim()).filter(x => /[a-záéíóúñ]{3,}/i.test(x));
+    let name = cells.sort((x, y) => y.length - x.length)[0] || '';
+    name = name.replace(/^\d{4,}\s*[-–]?\s*/, '').replace(/(\s+\d{1,2}){1,2}$/, '').trim();
+    if (!name || /^(asignatura|ramo|curso|nombre)s?$/i.test(name) || /^(promedio|total|ppa)\b/i.test(name)) continue;
+    const hc = (before.match(/(^|\s)(\d{1,2})\s*$/) || [])[2];
+    const code = (before.match(/(^|\s)(\d{5,7})(?=\s)/) || [])[2];
+    out.push({ semestre: sem, ramo: name, codigo: code || null, nota, hc: hc ? Number(hc) : null, situacion });
+  }
+  return out;
+}
+function normSemAny(s) {
+  s = String(s ?? '').trim();
+  let m = s.match(/^(\d{4})\s*-\s*0?([12])$/); if (m) return `${m[1]}-0${m[2]}`;
+  m = s.match(/^([12])\s*[\/\-]\s*(\d{4})$/); if (m) return `${m[2]}-0${m[1]}`;
+  return null;
+}
+function matchRamo(name) {
+  const n = simple(name);
+  const exact = RAMOS.find(x => simple(x.name) === n || simple(x.base) === n); if (exact) return exact;
+  const tok = s => new Set(simple(s).split(/[^a-z0-9]+/).filter(Boolean));
+  const a = tok(name); let best = null, bs = 0;
+  for (const x of RAMOS) { const b = tok(x.base); let inter = 0; a.forEach(t => { if (b.has(t)) inter++; }); const sc = (2 * inter) / (a.size + b.size || 1); if (sc > bs) { bs = sc; best = x; } }
+  return bs >= 0.85 ? best : null;
+}
+function diffCartola(items) {
+  const now = currentSem(), rows = [], skipped = [], seen = new Set();
+  for (const it of items) {
+    const sem = normSemAny(it?.semestre ?? it?.semester);
+    const nota = Number(String(it?.nota ?? '').replace(',', '.'));
+    const name = String(it?.ramo ?? it?.nombre ?? '').replace(/\s+/g, ' ').trim();
+    if (!name || !sem || !isFinite(nota) || nota < 1 || nota > 7) continue;
+    if (sem >= now) { skipped.push({ sem, name, nota }); continue; }
+    const r = (it?.codigo && RAMOS.find(x => x.code === String(it.codigo).trim())) || matchRamo(name);
+    const key = sem + '|' + (r ? r.code : simple(name)); if (seen.has(key)) continue; seen.add(key);
+    const ex = state.courses.find(c => c.semester === sem && (r ? c.code === r.code : simple(c.name) === simple(name)));
+    let kind = 'nuevo', prev = null;
+    if (ex) { const A = analyze(ex); prev = A.definitive ? A.show : null; kind = prev != null && Math.abs(prev - (ex.round ? r1(nota) : nota)) < 1e-9 ? 'igual' : 'actualiza'; }
+    rows.push({ sem, name: r ? r.name : name, r, nota, hc: Number(it?.hc) || null, ex: ex ? ex.id : null, prev, kind });
+  }
+  rows.sort((a, b) => b.sem.localeCompare(a.sem) || a.name.localeCompare(b.name, 'es'));
+  return { rows, skipped };
+}
+function cartolaReviewHTML(imp) {
+  const { rows, skipped } = imp.result;
+  const nu = rows.filter(r => r.kind === 'nuevo'), up = rows.filter(r => r.kind === 'actualiza'), eq = rows.filter(r => r.kind === 'igual');
+  const line = r => `<div class="imp-row cart"><span class="lvl-chip num">${esc(r.sem)}</span><span class="imp-n">${esc(r.name)}${!r.r ? '<em class="tag">no está en tu malla</em>' : ''}${r.kind === 'actualiza' && r.prev != null ? `<small>antes ${fmt(r.prev)}</small>` : ''}</span><span class="imp-s num ${ink(r.nota, 4)}" style="font-size:15px;font-weight:700">${fmt(r.nota)}</span></div>`;
+  const none = !nu.length && !up.length;
+  return `<div class="imp-review">
+    <div class="imp-sum"><span class="pill gris">${rows.length + skipped.length} filas leídas</span>${nu.length ? `<span class="pill azul">${nu.length} ${nu.length === 1 ? 'ramo nuevo' : 'ramos nuevos'}</span>` : ''}${up.length ? `<span class="pill ambar">${up.length} ${up.length === 1 ? 'nota cambia' : 'notas cambian'}</span>` : ''}${eq.length ? `<span class="pill gris">${eq.length} ya estaban</span>` : ''}${none ? '<span class="pill azul">Todo está al día</span>' : ''}</div>
+    ${nu.length ? `<div class="imp-sec">Se agregan</div>${nu.map(line).join('')}` : ''}
+    ${up.length ? `<div class="imp-sec">Se actualizan</div>${up.map(line).join('')}` : ''}
+    ${eq.length ? `<details class="imp-more"><summary>${eq.length} ${eq.length === 1 ? 'ramo ya estaba' : 'ramos ya estaban'} con la misma nota</summary>${eq.map(line).join('')}</details>` : ''}
+    ${skipped.length ? `<div class="imp-sec">No se cargan (semestre actual o futuro)</div>${skipped.map(s => line({ sem: s.sem, name: s.name, r: true, nota: s.nota })).join('')}` : ''}
+    <div class="imp-actions">${none ? '' : '<button class="btn primary" data-act="imp-apply">Cargar estas notas</button>'}<button class="btn" data-act="imp-cancel">${none ? 'Cerrar' : 'Descartar'}</button></div>
+  </div>`;
+}
+function applyCartola() {
+  let n = 0, u = 0;
+  for (const r of state.imp.result.rows) {
+    if (r.kind === 'igual') continue;
+    if (r.kind === 'actualiza') {
+      const c = state.courses.find(x => x.id === r.ex); if (!c) continue;
+      if (c.historic) { const g = c.components[0]?.grades[0]; if (g) g.value = r.nota; } else c.finalGrade = r.nota;
+      u++; continue;
+    }
+    state.courses.push(normalize(Object.assign(newCourse(r.sem), {
+      name: r.name, code: r.r ? r.r.code : null, level: r.r ? r.r.lv : 'otro',
+      credits: r.r ? r.r.sct : (r.hc || 0), locked: true, finalGrade: r.nota
+    })));
+    n++;
+  }
+  showPast = true; try { localStorage.setItem('libreta-ver-anteriores', '1'); } catch (_) {}
+  state.imp = { tab: 'cartola', status: 'ok', msg: `Listo: ${n} ${n === 1 ? 'ramo agregado' : 'ramos agregados'} y ${u} ${u === 1 ? 'nota actualizada' : 'notas actualizadas'}. Los ves en Semestres anteriores.` };
+  render(); scheduleSave();
+}
+async function runPaste(text) {
+  const ctl = new AbortController();
+  let items = parseCartolaText(text);
+  if (!items.length && hasAI() && text.trim()) {
+    state.imp = { tab: 'cartola', status: 'reading', ctl, msg: 'Leyendo el texto…' }; render();
+    try { items = await aiExtract('cartola', { text }, ctl.signal); } catch (e) { state.imp = e?.code === 'cancelled' ? null : { tab: 'cartola', status: 'error', msg: impErr(e) }; render(); return; }
+  }
+  const result = diffCartola(items || []);
+  state.imp = result.rows.length || result.skipped.length ? { tab: 'cartola', status: 'review', result } : { tab: 'cartola', status: 'error', msg: impErr({ code: 'nada-cartola' }) };
+  render();
+}
+async function checkIA() {
+  try { const r = await api('info', { user: remote.user, pin: remote.pin }); remote.ia = !!(r.ok && r.ia); } catch (_) { remote.ia = false; }
+  if (state.view === 'settings') render();
 }
 const findCol = (h, re) => h.findIndex(x => re.test(simple(x)));
 const toNum = v => { const s = String(v ?? '').replace(',', '.').replace(/[^\d.]/g, ''); return s ? Number(s) : null; };
@@ -1439,7 +1638,7 @@ function exportData() { return JSON.stringify({ app: 'registro-de-notas', v: 1, 
 function openKV() { return new Promise((res, rej) => { const r = indexedDB.open('registro-de-notas', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 async function kvGet(k) { try { const d = await openKV(); return await new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (_) { return null; } }
 async function kvSet(k, v) { try { const d = await openKV(); await new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); if (v == null) t.objectStore('kv').delete(k); else t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } catch (_) {} }
-const rerenderBk = () => { if (state.view === 'settings' && state.tab === 'respaldo') render(); };
+const rerenderBk = () => { if (state.view === 'settings' && state.tab === 'respaldo') { const t = document.getElementById('cart-text'); const v = t ? t.value : ''; render(); const n = document.getElementById('cart-text'); if (n && v) n.value = v; } };
 const hhmm = t => new Date(t).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 function parseBackup(text) {
   try { const d = JSON.parse(text); return d && Array.isArray(d.courses) ? d : null; } catch (_) { return null; }
@@ -1516,7 +1715,7 @@ function respaldoHTML() {
     ${review}
   </div>`;
   if (API) return `<p class="note">Tus datos viven en Google Drive y se guardan solos. También puedes descargar una copia o cargar una que tengas, por ejemplo la que bajaste desde la versión de Claude.</p>${profileHTML()}${copyCard}`;
-  if (!STANDALONE) return `<p class="note">Para usar la app fuera de Claude, descarga aquí tu copia y luego, en la versión en archivo (.html), ve a Configuración → Respaldo → Cargar copia.</p>${copyCard}`;
+  if (!STANDALONE) return `<p class="note">Para usar la app fuera de Claude, descarga aquí tu copia y luego, en la versión en archivo (.html), ve a Configuración → Mis datos → Cargar copia.</p>${copyCard}`;
   let auto;
   if (!canAutoFile()) auto = `<div class="imp-status err">Este navegador no permite guardar automáticamente en un archivo. Abre la app con Chrome o Edge en el computador.</div>`;
   else if (!bk.handle) auto = `<ol class="steps"><li>Instala <b>Google Drive para escritorio</b> si aún no lo tienes; crea una carpeta de Drive en tu computador.</li><li>Toca <b>Elegir archivo de respaldo</b> y guarda <b>registro-de-notas.json</b> dentro de esa carpeta de Google Drive.</li><li>Listo: cada cambio se guarda en ese archivo y Drive lo sube solo a tu cuenta.</li></ol>
@@ -1540,7 +1739,7 @@ const API_SET = typeof window.REGISTRO_API === 'string';
 const API = API_SET && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec\/?$/.test(window.REGISTRO_API.trim()) ? window.REGISTRO_API.trim() : null;
 const SESSION_KEY = 'registro-sesion';
 const PIDE_CODIGO = window.REGISTRO_PIDE_CODIGO === true;
-const remote = { user: null, pin: null, version: 0, dirty: false, saving: false, again: false, t: null, poll: null };
+const remote = { user: null, pin: null, version: 0, dirty: false, saving: false, again: false, t: null, poll: null, ia: undefined };
 const lsKey = () => API && remote.user ? `registro-cache:${remote.user}` : LS_KEY;
 const LOGIN_ERR = {
   apodo: 'El apodo debe tener entre 2 y 24 letras o números.',
@@ -1551,9 +1750,9 @@ const LOGIN_ERR = {
   bloqueado: 'Demasiados intentos fallidos. Espera 15 minutos e intenta de nuevo.',
   server: 'El servidor tuvo un problema. Intenta de nuevo en un momento.'
 };
-async function api(action, payload) {
+async function api(action, payload, signal) {
   // cuerpo en texto plano: así el navegador no hace la consulta previa (CORS) que Apps Script no responde
-  const res = await fetch(API, { method: 'POST', body: JSON.stringify(Object.assign({ action }, payload)) });
+  const res = await fetch(API, { method: 'POST', body: JSON.stringify(Object.assign({ action }, payload)), signal });
   if (!res.ok) throw { code: 'red' };
   return res.json();
 }
@@ -1606,7 +1805,7 @@ async function doLogin(form) {
     state.login = null; state.sel = null; state.view = null; state.pane = 'list';
     applyRemote(r);
     setSave('ok', `Guardado en Drive · ${r.user}`);
-    startPoll();
+    startPoll(); checkIA();
     if (crear) toast(`Perfil “${r.user}” creado.`);
   } catch (_) {
     btn.disabled = false; btn.textContent = crear ? 'Crear perfil' : 'Entrar';
@@ -1651,7 +1850,7 @@ function startPoll() { clearInterval(remote.poll); remote.poll = setInterval(() 
 function logout(msg) {
   clearInterval(remote.poll); clearTimeout(remote.t);
   try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
-  Object.assign(remote, { user: null, pin: null, version: 0, dirty: false, saving: false, again: false, t: null, poll: null });
+  Object.assign(remote, { user: null, pin: null, version: 0, dirty: false, saving: false, again: false, t: null, poll: null, ia: undefined });
   state.courses = []; state.meta = {}; state.view = null; state.sel = null;
   state.login = { mode: 'entrar', msg: msg || '' };
   setSave('', 'Sin sesión'); render();
@@ -1670,7 +1869,7 @@ async function remoteInit() {
       else { if (remote.dirty) toast('Había cambios en otro dispositivo; se cargó la versión de Drive.'); applyRemote(r); setSave('ok', `Guardado en Drive · ${remote.user}`); }
     } else if (r.error === 'auth' || r.error === 'bloqueado') return logout(LOGIN_ERR[r.error]);
   } catch (_) { setSave('err', 'Sin conexión: usando la copia de este dispositivo'); }
-  startPoll();
+  startPoll(); checkIA();
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) remoteRefresh(false); });
 window.addEventListener('online', () => remoteRefresh(true));
@@ -1689,7 +1888,7 @@ function emptyHTML() {
     <div class="demo-scale"><span class="ink-rojo">3,2</span><span class="ink-rojo">3,9</span><span class="ink-azul">4,0</span><span class="ink-azul">5,5</span><span class="ink-azul">6,8</span></div>
     <h2>Todavía no tienes cursos</h2>
     <p>Crea un curso, define cuánto pesa cada evaluación y anota tus notas. La app calcula tu promedio, elimina las peores notas cuando corresponde y te dice cuánto necesitas en lo que queda para aprobar o eximirte.</p>
-    <div class="side-actions"><button class="btn primary" data-act="new-course">Crear curso</button><button class="btn" data-act="load-example">Ver con cursos de ejemplo</button></div>
+    <div class="side-actions"><button class="btn primary" data-act="new-course">Crear curso</button><button class="btn" data-act="go-cartola">Cargar notas de la cartola</button><button class="btn plain" data-act="load-example">Ver con cursos de ejemplo</button></div>
   </section>`;
 }
 function renderHeader() {
@@ -1801,11 +2000,16 @@ function renderMain() {
   const exHint = `Nota final = presentación × ${fmt(100 - (Number(ex.weight) || 0), 0)}% + examen × ${fmt(Number(ex.weight) || 0, 0)}%. Si fijas una nota de eximición y tu presentación la alcanza, la presentación pasa a ser tu nota final.`;
   main.innerHTML = `<section class="detail ${animatePane ? 'pane-in' : ''}">
     ${courseHeadHTML(c)}
+    ${isPastSem(c) && !c.historic ? `<div class="card final-card"><div class="fc-top">
+      <div class="fc-txt"><div class="imp-title">Nota final del ramo</div><div class="cap">Si ya terminaste este ramo, escribe solo la nota final. Tus PEP, controles y demás quedan guardados, pero no se usan para calcular.</div></div>
+      <div class="gr fc-gr"><span class="gl-s">Nota final</span><input id="c-final" class="gv ${ink(c.finalGrade ?? null, c.pass)}" data-k="final-grade" inputmode="decimal" placeholder="—" value="${gtxt(c.finalGrade ?? null)}" aria-label="Nota final del ramo"></div>
+    </div></div>` : ''}
     <div id="result" class="card hero"></div>
     <div id="pepbox"></div>
     <div id="sufbox"></div>
     <div class="sec"><span>${ex.enabled ? 'Nota de presentación' : 'Evaluaciones'}</span><span id="wsum" class="wsum"></span></div>
-    <div class="comps">${c.components.map(compHTML).join('')}</div>
+    <p id="direct-note" class="foot-hint" ${isDirect(c) ? '' : 'hidden'}>Estas evaluaciones no se usan porque ingresaste la nota final del ramo.</p>
+    <div class="comps ${isDirect(c) ? 'unused' : ''}">${c.components.map(compHTML).join('')}</div>
     <button class="btn tinted" data-act="add-comp">Agregar evaluación</button>
     <div class="sec"><span>Examen</span></div>
     <div class="group exam">
@@ -1940,6 +2144,8 @@ function refresh() {
   const ws = c.components.reduce((s, k) => s + (Number(k.weight) || 0), 0);
   const wEl = document.getElementById('wsum');
   if (wEl) { const okW = Math.abs(ws - 100) < 0.01; wEl.className = 'wsum' + (okW ? '' : ' bad'); wEl.textContent = okW ? 'Pesos suman 100%' : `Los pesos suman ${fmt(ws, ws % 1 ? 1 : 0)}%, deberían sumar 100%`; }
+  document.querySelector('#main .comps')?.classList.toggle('unused', !!A.direct);
+  const DN = document.getElementById('direct-note'); if (DN) DN.hidden = !A.direct;
   const R = document.getElementById('result'); if (R) R.innerHTML = resultHTML(c, A);
   const PB = document.getElementById('pepbox'); if (PB) PB.innerHTML = pepBoxHTML(c);
   const SB = document.getElementById('sufbox');
@@ -1952,6 +2158,7 @@ function refresh() {
   renderSide(); renderHeader();
 }
 function pepBoxHTML(c) {
+  if (isDirect(c)) return '';
   const pn = pepNow(c); if (!pn) return '';
   // el aviso aparece solo cuando ya hay alguna nota de PEP y ninguna llega al mínimo
   if (pn.s === 'ok') return '';
@@ -1995,6 +2202,12 @@ function sufBoxHTML(c, A) {
 }
 function resultHTML(c, A) {
   const st = statusOf(c, A); const ex = c.exam;
+  if (A.direct) {
+    const e = A.end;
+    return `<div class="hero-figs"><div class="fig"><div class="l">Nota final</div><div class="v ${ink(e.fr, c.pass)}">${fmt(e.fr)}</div><div class="s">ingresada directamente</div></div></div>
+      <div class="verdict"><span class="pill ${st.tone}">${st.text}</span><p>${e.ok ? `Aprobaste con ${fmt(e.fr)}.` : `Reprobaste con ${fmt(e.fr)}.`} Para calcular con tus evaluaciones, borra la nota final.</p></div>
+      <div class="scale" aria-hidden="true"><div class="track"><div class="lo" style="width:${pct(c.pass)}"></div><div class="hi"></div></div><div class="tick" style="left:${pct(c.pass)}"></div><div class="mk cur" style="left:${pct(e.fr)}"></div>${[1, 2, 3, 5, 6, 7].filter(v => Math.abs(v - c.pass) > .45).map(v => `<span class="lab" style="left:${pct(v)}">${v},0</span>`).join('')}<span class="lab pass" style="left:${pct(c.pass)}">${fmt(c.pass)}</span></div>`;
+  }
   if (!A.total) return `<div class="verdict"><span class="pill gris">Sin notas</span><p>Agrega evaluaciones y sus notas para ver tu promedio.</p></div>`;
   const figs = []; let sentence = ''; let curV = null, needV = null;
   const examTxt = ex.enabled && A.examPending ? ' (incluido el examen)' : '';
@@ -2119,6 +2332,7 @@ app.addEventListener('input', e => {
     case 'exam-on': c.exam.enabled = el.checked; scheduleSave(); renderMain(); return;
     case 'exam-weight': { const v = clampPct(el, 100); if (v !== undefined) c.exam.weight = v; break; }
     case 'exam-exempt': { const p = parseGrade(el.value); bad(p.ok); if (p.ok) c.exam.exempt = p.v; break; }
+    case 'final-grade': { const p = parseGrade(el.value); bad(p.ok); c.finalGrade = p.ok ? p.v : null; el.classList.toggle('ink-azul', c.finalGrade != null && c.finalGrade >= c.pass - 1e-9); el.classList.toggle('ink-rojo', c.finalGrade != null && c.finalGrade < c.pass - 1e-9); break; }
     case 'suf-value': { const p = parseGrade(el.value); bad(p.ok); c.suf = { value: p.ok ? p.v : null }; el.classList.toggle('ink-azul', c.suf.value != null && c.suf.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', c.suf.value != null && c.suf.value < c.pass - 1e-9); break; }
     case 'suf-rule': c.sufRule = el.checked; scheduleSave(); renderMain(); return;
     case 'exam-value': { const p = parseGrade(el.value); bad(p.ok); c.exam.value = p.ok ? p.v : null; el.classList.toggle('ink-azul', c.exam.value != null && c.exam.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', c.exam.value != null && c.exam.value < c.pass - 1e-9); break; }
@@ -2130,7 +2344,7 @@ function renderInk(c) {
   c.components.forEach(k => k.grades.forEach(g => { const el = document.getElementById('g-v-' + g.id); if (el) { el.classList.toggle('ink-azul', g.value != null && g.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', g.value != null && g.value < c.pass - 1e-9); } }));
 }
 // límites: ninguna nota sobre 7,0 y ningún conjunto de porcentajes sobre 100%
-const GRADE_KEYS = ['g-value', 'exam-value', 'comp-min', 'exam-exempt', 'pass', 'pep-min', 'suf-value'];
+const GRADE_KEYS = ['g-value', 'exam-value', 'comp-min', 'exam-exempt', 'pass', 'pep-min', 'suf-value', 'final-grade'];
 let toastT = null;
 function toast(msg) { const t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400); }
 const numTxt = v => String(Math.round(v * 10) / 10).replace('.', ',');
@@ -2158,12 +2372,13 @@ function clampPct(el, max) {
 // guarda el último valor válido de cada campo de nota para volver a él si se pasa de 7,0
 app.addEventListener('focusin', e => { const el = e.target; if (GRADE_KEYS.includes(el.dataset?.k) || el.id === 'con-nota') el.dataset.prev = el.value; });
 // las notas que se escriben directo en el curso también quedan en el registro de la consola
-const LOGGED_KEYS = ['g-value', 'exam-value', 'suf-value'];
+const LOGGED_KEYS = ['g-value', 'exam-value', 'suf-value', 'final-grade'];
 function gradeRef(el) {
   const c = cur(); if (!c) return null;
   const k = el.dataset.k;
   if (k === 'exam-value') return { c, gid: 'exam', label: 'Examen', value: c.exam.value };
   if (k === 'suf-value') return { c, gid: 'suf', label: 'Examen de suficiencia', value: c.suf?.value ?? null };
+  if (k === 'final-grade') return { c, gid: 'final', label: 'Nota final del ramo', value: c.finalGrade ?? null };
   const kp = findComp(c, el.dataset.c); const g = kp?.grades.find(x => x.id === el.dataset.g); if (!g) return null;
   const name = kp.name || 'Evaluación';
   return { c, gid: g.id, label: kp.grades.length === 1 && !kp.weighted ? name : `${name} · ${g.label || 'nota'}`, value: g.value };
@@ -2186,7 +2401,7 @@ app.addEventListener('input', e => {
 }, true);
 app.addEventListener('focusout', e => {
   const el = e.target; const k = el.dataset?.k;
-  if (!['g-value', 'pass', 'comp-min', 'exam-exempt', 'exam-value', 'pep-min', 'suf-value'].includes(k)) return;
+  if (!['g-value', 'pass', 'comp-min', 'exam-exempt', 'exam-value', 'pep-min', 'suf-value', 'final-grade'].includes(k)) return;
   const p = parseGrade(el.value); if (p.ok && p.v != null) el.value = gtxt(p.v);
 });
 let armTimer = null;
@@ -2211,7 +2426,7 @@ app.addEventListener('change', e => {
     return;
   }
   if (e.target.id === 'sort-sel') { sortMode = e.target.value; try { localStorage.setItem('libreta-orden', sortMode); } catch (_) {} renderSide(); document.getElementById('sort-sel')?.focus(); return; }
-  if (e.target.id === 'imp-photo-in' || e.target.id === 'imp-file-in') { const files = [...(e.target.files || [])]; e.target.value = ''; runImport(state.tab || 'malla', e.target.id === 'imp-photo-in' ? 'photo' : 'file', files); return; }
+  if (e.target.id === 'imp-photo-in' || e.target.id === 'imp-file-in') { const files = [...(e.target.files || [])]; e.target.value = ''; runImport(impTab(), e.target.id === 'imp-photo-in' ? 'photo' : 'file', files); return; }
   if (e.target.id === 'imp-remove') { state.imp.removeMissing = e.target.checked; render(); return; }
   if (e.target.id === 'con-ramo') { state.con.cid = e.target.value; state.con.key = null; render(); }
   else if (e.target.id === 'con-eval') { state.con.key = e.target.value; conHint(); }
@@ -2242,7 +2457,9 @@ app.addEventListener('click', e => {
     case 'imp-file': document.getElementById('imp-file-in')?.click(); return;
     case 'imp-stop': state.imp?.ctl?.abort(); return;
     case 'imp-cancel': state.imp = null; render(); return;
-    case 'imp-apply': if (state.imp?.tab === 'malla') applyMalla(); else applyElec(); return;
+    case 'imp-apply': if (state.imp?.tab === 'malla') applyMalla(); else if (state.imp?.tab === 'cartola') applyCartola(); else applyElec(); return;
+    case 'imp-paste': { const t = document.getElementById('cart-text')?.value || ''; if (!t.trim()) { toast('Primero pega la tabla de tu cartola.'); return; } runPaste(t); return; }
+    case 'go-cartola': closeMenus(); state.view = 'settings'; state.tab = 'respaldo'; state.imp = null; render(); window.scrollTo({ top: 0 }); return;
     case 'toggle-past': showPast = !showPast; if (showPast) justOpened = '__past'; try { localStorage.setItem('libreta-ver-anteriores', showPast ? '1' : '0'); } catch (_) {} renderSide(); return;
     case 'set-theme': state.meta.look = Object.assign({}, state.meta.look, { theme: b.dataset.theme }); render(); scheduleSave(); return;
     case 'set-mode': state.meta.look = Object.assign({}, state.meta.look, { mode: b.dataset.mode }); render(); scheduleSave(); return;

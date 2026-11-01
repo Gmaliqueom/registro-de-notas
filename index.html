@@ -1,0 +1,2446 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2F3F7">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B0D12">
+<meta name="color-scheme" content="light dark">
+<title>Registro de Notas</title>
+<script>
+  // ⬇️ PEGA AQUÍ la URL de tu puente de Google Apps Script (la que termina en /exec), entre las comillas.
+  window.REGISTRO_API = 'https://script.google.com/macros/s/AKfycbxX2EqG5m016EA02j3F4vRf9DT7Y-8vWPnyJ0eKWtlQEuz7K1596d8ppr1d4qmBJ6U0/exec';
+</script>
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Registro de Notas</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: app de lista + detalle al estilo iOS. Escritorio: semestres a la izquierda (fijos), curso a la derecha.
+   Celular: navegación en dos pantallas (lista → curso) con botón Atrás en la barra translúcida.
+   Notas azules (≥ aprobación) y rojas (bajo ella), como en la libreta chilena. */
+:root{
+  --bg:#F2F3F7; --surface:#FFFFFF; --fill:#EEF0F5; --fill-2:#DFE3EB; --ink:#10131A; --ink-2:#3B4150; --muted:#6B7385;
+  --sep:rgba(60,66,90,.14); --bar:rgba(242,243,247,.78); --shadow:rgba(16,19,26,.16);
+  --azul:#0A63E8; --azul-soft:#E5EDFD; --on-azul:#FFFFFF;
+  --rojo:#D63027; --rojo-soft:#FCE7E5; --on-rojo:#FFFFFF;
+  --ambar:#A65E00; --ambar-soft:#FCF0DB; --on-ambar:#FFFFFF;
+  /* Tema elegido (lo cambia Configuración → Temas); las notas siguen azules y rojas */
+  --t-accent-l:#0A63E8; --t-accent-soft-l:#E5EDFD; --t-on-accent-l:#FFFFFF; --t-wall-l:none;
+  --t-accent-d:#5B9BFF; --t-accent-soft-d:rgba(91,155,255,.16); --t-on-accent-d:#06142E; --t-wall-d:none;
+  --accent:var(--t-accent-l); --accent-soft:var(--t-accent-soft-l); --on-accent:var(--t-on-accent-l); --wall:var(--t-wall-l);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-num:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  --ease-out:cubic-bezier(0.23,1,0.32,1); --ease-drawer:cubic-bezier(0.32,0.72,0,1);
+  --r-lg:16px; --r-md:12px;
+  --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%238A90A0' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0B0D12; --surface:#171A21; --fill:#232733; --fill-2:#323847; --ink:#F2F4F8; --ink-2:#C9CED8; --muted:#8E96A7;
+  --sep:rgba(255,255,255,.10); --bar:rgba(11,13,18,.74); --shadow:rgba(0,0,0,.5);
+  --azul:#5B9BFF; --azul-soft:rgba(91,155,255,.16); --on-azul:#06142E;
+  --rojo:#FF6B60; --rojo-soft:rgba(255,107,96,.15); --on-rojo:#2A0705;
+  --ambar:#FFB547; --ambar-soft:rgba(255,181,71,.15); --on-ambar:#2B1A00;
+  --accent:var(--t-accent-d); --accent-soft:var(--t-accent-soft-d); --on-accent:var(--t-on-accent-d); --wall:var(--t-wall-d);
+  color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0B0D12; --surface:#171A21; --fill:#232733; --fill-2:#323847; --ink:#F2F4F8; --ink-2:#C9CED8; --muted:#8E96A7;
+  --sep:rgba(255,255,255,.10); --bar:rgba(11,13,18,.74); --shadow:rgba(0,0,0,.5);
+  --azul:#5B9BFF; --azul-soft:rgba(91,155,255,.16); --on-azul:#06142E;
+  --rojo:#FF6B60; --rojo-soft:rgba(255,107,96,.15); --on-rojo:#2A0705;
+  --ambar:#FFB547; --ambar-soft:rgba(255,181,71,.15); --on-ambar:#2B1A00;
+  --accent:var(--t-accent-d); --accent-soft:var(--t-accent-soft-d); --on-accent:var(--t-on-accent-d); --wall:var(--t-wall-d);
+  color-scheme:dark }
+
+:root.m-light{
+  --bg:#F2F3F7; --surface:#FFFFFF; --fill:#EEF0F5; --fill-2:#DFE3EB; --ink:#10131A; --ink-2:#3B4150; --muted:#6B7385;
+  --sep:rgba(60,66,90,.14); --bar:rgba(242,243,247,.78); --shadow:rgba(16,19,26,.16);
+  --azul:#0A63E8; --azul-soft:#E5EDFD; --on-azul:#FFFFFF;
+  --rojo:#D63027; --rojo-soft:#FCE7E5; --on-rojo:#FFFFFF;
+  --ambar:#A65E00; --ambar-soft:#FCF0DB; --on-ambar:#FFFFFF;
+  --accent:var(--t-accent-l); --accent-soft:var(--t-accent-soft-l); --on-accent:var(--t-on-accent-l); --wall:var(--t-wall-l);
+  color-scheme:light }
+:root.m-dark{
+  --bg:#0B0D12; --surface:#171A21; --fill:#232733; --fill-2:#323847; --ink:#F2F4F8; --ink-2:#C9CED8; --muted:#8E96A7;
+  --sep:rgba(255,255,255,.10); --bar:rgba(11,13,18,.74); --shadow:rgba(0,0,0,.5);
+  --azul:#5B9BFF; --azul-soft:rgba(91,155,255,.16); --on-azul:#06142E;
+  --rojo:#FF6B60; --rojo-soft:rgba(255,107,96,.15); --on-rojo:#2A0705;
+  --ambar:#FFB547; --ambar-soft:rgba(255,181,71,.15); --on-ambar:#2B1A00;
+  --accent:var(--t-accent-d); --accent-soft:var(--t-accent-soft-d); --on-accent:var(--t-on-accent-d); --wall:var(--t-wall-d);
+  color-scheme:dark }
+
+*{box-sizing:border-box}
+html{-webkit-tap-highlight-color:transparent;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{background-color:var(--bg);background-image:var(--wall);background-attachment:fixed;background-repeat:no-repeat;color:var(--ink);font:15px/1.45 var(--font);letter-spacing:-0.005em;padding-block:0 calc(56px + env(safe-area-inset-bottom,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:11;background:var(--bg)}
+button,input,select{font:inherit;color:inherit;letter-spacing:inherit}
+button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.ink-azul{color:var(--azul)!important} .ink-rojo{color:var(--rojo)!important}
+
+/* Barra superior translúcida */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bar);-webkit-backdrop-filter:blur(20px) saturate(180%);backdrop-filter:blur(20px) saturate(180%);box-shadow:0 1px 0 transparent;transition:box-shadow 200ms ease}
+.topbar.scrolled{box-shadow:0 1px 0 var(--sep)}
+.bar-in{max-width:1180px;margin:0 auto;height:52px;display:flex;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:17px;letter-spacing:-0.02em}
+.brand-mark{width:28px;height:28px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-family:var(--font-num);font-size:12px;font-weight:800;letter-spacing:-0.02em}
+.back{display:none;align-items:center;gap:2px;border:0;background:none;color:var(--accent);font-size:17px;font-weight:500;padding:6px 8px 6px 0;margin-left:-4px;transition:opacity 150ms ease}
+.back svg{width:22px;height:22px}
+.back:active{opacity:.5}
+.bar-spacer{flex:1}
+.save{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}
+.save::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.save[data-s="ok"]::before{background:var(--accent)} .save[data-s="busy"]::before{background:var(--ambar)} .save[data-s="err"]::before{background:var(--rojo)}
+@media (max-width:600px){.save{font-size:0;gap:0}}
+.icon-btn{width:36px;height:36px;flex:none;border-radius:999px;border:0;background:var(--fill);color:var(--ink-2);display:grid;place-items:center;transition:transform 120ms var(--ease-out),background-color 150ms ease,color 150ms ease}
+.icon-btn:active{transform:scale(.92)}
+.icon-btn svg{width:19px;height:19px}
+.icon-btn.sm{width:30px;height:30px}
+.icon-btn[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-top:6px}
+
+/* Título grande y resumen */
+.intro{display:flex;flex-direction:column;gap:14px}
+.large-title{font-family:var(--font-display);font-size:clamp(28px,5vw,34px);font-weight:700;letter-spacing:-0.025em;line-height:1.1;margin:6px 0 0;text-wrap:balance}
+.card{background:var(--surface);border-radius:var(--r-lg)}
+.summary{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 16px;align-items:center;padding:16px 18px 18px}
+.summary .lbl{font-size:13px;font-weight:600;color:var(--muted)}
+.summary .sub{font-size:13px;color:var(--muted)}
+.summary .big{grid-row:1/3;grid-column:2;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:46px;font-weight:700;line-height:1;letter-spacing:-0.02em}
+.progress{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;margin-top:14px}
+.pbar{height:6px;border-radius:99px;background:var(--fill);overflow:hidden}
+.pbar i{display:block;height:100%;width:100%;background:var(--accent);border-radius:inherit;transform-origin:left center;transform:scaleX(0);transition:transform 400ms var(--ease-out)}
+.ptxt{font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.ptxt b{color:var(--ink);font-weight:600}
+.ptxt .pct{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:17px;font-weight:700;color:var(--accent);margin-left:6px}
+/* Semestre actual destacado y semestres anteriores plegados */
+.sem.current{box-shadow:0 0 0 1.5px var(--accent)}
+.cur-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:14px 16px;background:var(--accent-soft)}
+.cur-lbl{display:block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.cur-name{display:block;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:24px;font-weight:700;letter-spacing:-0.01em;line-height:1.2}
+.sem-avg.big-avg{font-size:28px}
+.sem.current .sem-list::before{display:none}
+.sort-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px 8px 16px;border-bottom:1px solid var(--sep);font-size:13px;font-weight:600;color:var(--muted)}
+.sort-row .field{width:auto;max-width:62%;padding-block:6px;font-size:14px;font-weight:600;color:var(--ink)}
+.cur-empty{padding:14px 16px;font-size:14px;color:var(--muted)}
+.past-toggle{display:flex;align-items:center;gap:10px;width:100%;border:0;background:transparent;padding:10px 8px;color:var(--ink-2);font-weight:600;font-size:15px;border-radius:10px;text-align:left;transition:background-color 150ms ease}
+.past-toggle:active{background:var(--fill)}
+.past-toggle[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.past-toggle .past-n{margin-left:auto;font-family:var(--font-num);font-size:13px;font-weight:700;color:var(--muted);background:var(--surface);border-radius:999px;padding:1px 10px}
+.past{display:flex;flex-direction:column;gap:10px}
+
+/* Grilla lista + detalle */
+.grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:24px;align-items:start}
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 64px);max-height:calc(100dvh - 76px - env(safe-area-inset-top,0px));overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:10px;padding-bottom:16px;scrollbar-width:thin}
+#main{min-width:0}
+@media (max-width:899px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .side{position:static;max-height:none;overflow:visible}
+  .grid[data-pane="list"] #main{display:none}
+  .grid[data-pane="detail"] .side{display:none}
+  body.is-detail .intro{display:none}
+  body.is-detail .back{display:inline-flex}
+  body.is-detail .brand{display:none}
+}
+body.is-settings .intro,body.is-console .intro{display:none}
+
+/* Modo enfoque (escritorio): oculta semestres y resumen para ver solo el curso */
+.side-btn{display:none}
+@media (min-width:900px){
+  body:not(.is-settings):not(.is-console) .side-btn{display:grid}
+  body.is-focus .side,body.is-focus .intro{display:none}
+  body.is-focus .grid{grid-template-columns:minmax(0,1fr)}
+  body.is-focus .detail{max-width:900px;width:100%;margin-inline:auto}
+}
+.sec .btn.plain{text-transform:none;letter-spacing:0;padding:0 4px;font-size:13px}
+
+/* Pestañas superiores: Notas / Consola */
+.top-tabs{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--fill);border-radius:10px;padding:2px;flex:none}
+.top-tabs button{border:0;background:transparent;border-radius:8px;padding:6px 14px;font-size:13px;font-weight:600;color:var(--ink-2);transition:background-color 200ms ease,box-shadow 200ms ease,color 200ms ease}
+.top-tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px var(--shadow)}
+@media (max-width:600px){.brand-txt{display:none}.top-tabs button{padding:6px 12px}}
+
+/* Consola */
+.console{display:flex;flex-direction:column;gap:14px;max-width:760px}
+.con-form .rowf.stack{padding-block:12px}
+.con-nota-row{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.con-nota{width:130px;flex:none;text-align:center;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:30px!important;font-weight:700;padding:6px 10px}
+.con-nota-row .btn{flex:1 1 160px}
+.con-nota::placeholder{color:var(--muted);opacity:.35;font-weight:500}
+.con-hint{font-size:13px;color:var(--muted);min-height:18px}
+.con-hint.err{color:var(--rojo)}
+.con-preview{padding:14px 16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:center}
+.con-preview .cp-name{font-weight:600;overflow-wrap:anywhere}
+.con-preview .cp-sub{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.con-preview .cp-num{grid-row:1/3;grid-column:2;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:34px;font-weight:700;line-height:1}
+.logrow{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 14px;align-items:center;padding:11px 16px}
+.logrow + .logrow::before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--sep)}
+.logrow .lmain{min-width:0;display:flex;flex-direction:column}
+.logrow .lmain b{font-weight:600;overflow-wrap:anywhere}
+.logrow .ls{font-size:13px;color:var(--ink-2)}
+.logrow .lt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.logrow .lv{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:24px;font-weight:700}
+.logrow .lact{grid-column:1/-1;display:flex;gap:2px 12px;margin-left:-6px}
+.logrow .lact .btn{padding:4px 6px;font-size:13px}
+.logrow.undone .lv{text-decoration:line-through;color:var(--muted)!important}
+.logrow.undone .lmain{opacity:.6}
+.logrow.flash{animation:flash 1600ms var(--ease-out)}
+@keyframes flash{from{background-color:var(--accent-soft)}}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--ink-2)}
+.intro-sub{margin:-8px 2px 0;color:var(--muted);font-size:14px}
+.intro-sub:empty{display:none}
+.mencion-pick{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;width:100%}
+.mencion-card{border:0;background:var(--fill);border-radius:var(--r-lg);padding:16px;text-align:left;display:flex;flex-direction:column;gap:4px;transition:transform 120ms var(--ease-out),box-shadow 150ms ease,background-color 150ms ease}
+.mencion-card:active{transform:scale(.97)}
+.mencion-card[aria-pressed="true"]{background:var(--accent-soft);box-shadow:0 0 0 2px var(--accent)}
+.mencion-card.armed{box-shadow:0 0 0 2px var(--ambar)}
+.mc-t{font-weight:700;font-size:17px;letter-spacing:-0.01em}
+.mc-s{font-size:13px;color:var(--muted)}
+.login{padding:clamp(22px,4vw,36px);display:flex;flex-direction:column;gap:14px;max-width:520px;width:100%;margin:28px auto 0}
+.login h2{font-family:var(--font-display);font-size:26px;letter-spacing:-0.02em;margin:0}
+.login > p{margin:0;color:var(--ink-2)}
+.login-form .btn{width:100%}
+.login > .btn.plain{align-self:flex-start}
+body.is-login .intro,body.is-login .top-tabs,body.is-login #gear,body.is-login #sidebtn{display:none!important}
+code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.9em;background:var(--fill);padding:1px 5px;border-radius:5px}
+.trash{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.trash > .group{align-self:stretch}
+.log-empty{padding:16px;font-size:14px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.logrow.flash{animation:flash 800ms ease}}
+
+.sec{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:13px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin:8px 6px -4px}
+.sec .wsum{text-transform:none;letter-spacing:0;font-weight:500}
+.sec .wsum.bad{color:var(--rojo)}
+
+/* Semestres */
+.sem{background:var(--surface);border-radius:var(--r-lg);overflow:hidden}
+.sem-head{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;border:0;background:transparent;text-align:left;padding:13px 16px;transition:background-color 150ms ease}
+.sem-head:active{background:var(--fill)}
+.chev{width:18px;height:18px;color:var(--muted);flex:none;transition:transform 220ms var(--ease-out)}
+.sem.open .sem-head .chev{transform:rotate(90deg)}
+.sem-name{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px}
+.sem-name .here{width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.sem-sub{display:block;font-size:13px;color:var(--muted)}
+.sem-avg{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:20px;font-weight:700}
+.sem-list{position:relative}
+.sem-list::before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--sep)}
+.just-opened{animation:fadeDown 220ms var(--ease-out)}
+@keyframes fadeDown{from{opacity:0;transform:translateY(-6px)}}
+.row{position:relative;width:100%;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:center;text-align:left;border:0;background:transparent;padding:11px 16px;transition:background-color 150ms ease}
+.row + .row::before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--sep)}
+.row:active{background:var(--fill)}
+.row.active{background:var(--accent-soft)}
+.row.active::before,.row.active + .row::before{opacity:0}
+.row .n{font-weight:500;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.row .m{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+.dot.azul{background:var(--azul)} .dot.rojo{background:var(--rojo)} .dot.ambar{background:var(--ambar)}
+.row .g{grid-row:1/3;grid-column:2;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:22px;font-weight:700}
+.row .g.part{font-weight:500}
+.tag{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ambar);background:var(--ambar-soft);border-radius:5px;padding:2px 6px;margin-left:6px;vertical-align:2px}
+.side-actions{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.side-links{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px}
+
+/* Botones */
+.btn{border:0;border-radius:var(--r-md);padding:12px 16px;font-weight:600;font-size:15px;background:var(--fill);color:var(--ink);transition:transform 120ms var(--ease-out),background-color 150ms ease,color 150ms ease}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.tinted{background:var(--accent-soft);color:var(--accent)}
+.btn.plain{background:transparent;color:var(--accent);padding:8px 6px}
+.btn.small{padding:8px 12px;font-size:14px;border-radius:10px}
+.btn.danger{background:var(--rojo-soft);color:var(--rojo)}
+.btn.danger.armed{background:var(--rojo);color:var(--on-rojo)}
+
+/* Curso */
+.detail{display:flex;flex-direction:column;gap:14px}
+.pane-in{animation:paneIn 300ms var(--ease-drawer)}
+@keyframes paneIn{from{opacity:0;transform:translateX(28px)}}
+@keyframes fadeOnly{from{opacity:0}}
+.d-head{display:flex;align-items:flex-start;gap:12px;padding:4px 4px 2px}
+.d-title{flex:1;min-width:0}
+.cname{font-family:var(--font-display);font-size:clamp(24px,3.6vw,30px);font-weight:700;letter-spacing:-0.022em;line-height:1.15;text-wrap:balance;margin:0;border:0;background:transparent;width:100%;padding:0;overflow-wrap:anywhere}
+input.cname{border-bottom:1.5px dashed var(--fill-2);border-radius:0;padding-bottom:2px}
+input.cname:focus{outline:none;border-bottom-color:var(--accent)}
+.cname-sub{font-size:13px;color:var(--muted);margin-top:5px;font-variant-numeric:tabular-nums}
+
+/* Listas agrupadas */
+.group{background:var(--surface);border-radius:var(--r-lg);overflow:hidden}
+.rowf{position:relative;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;min-height:52px;padding:9px 16px}
+.rowf + .rowf::before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--sep)}
+.rowf .lbl{flex:1 1 160px;min-width:0}
+.rowf .lbl small{display:block;font-size:12.5px;color:var(--muted);margin-top:1px}
+.rowf .ctl{display:flex;align-items:center;gap:6px;margin-left:auto;min-width:0;max-width:100%}
+.rowf .unit{color:var(--muted)}
+.rowf .val{color:var(--muted);font-weight:600}
+.rowf.stack{flex-direction:column;align-items:stretch;gap:6px}
+.rowf.stack .lbl{flex:none;font-size:13px;color:var(--muted)}
+.rowf.note{min-height:0;padding-block:10px 12px;font-size:13px;color:var(--muted);display:block}
+.field{background:var(--fill);border:0;border-radius:9px;padding:8px 10px;font-size:15px;min-width:0;width:100%;transition:box-shadow 150ms ease,background-color 150ms ease}
+.field:focus{outline:none;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.field.num-in{width:86px;text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:600}
+.field:disabled{opacity:.45}
+select.field,select.type,.wrow select{appearance:none;-webkit-appearance:none;background-image:var(--chev);background-repeat:no-repeat;background-size:11px 8px;background-position:right 11px center;padding-right:32px;text-overflow:ellipsis}
+select.field{max-width:min(100%,420px)}
+select option,select optgroup{background-color:var(--surface);color:var(--ink);font-weight:500}
+select option:disabled{color:var(--muted)}
+.bad,input.bad,select.bad{box-shadow:inset 0 0 0 1.5px var(--rojo)!important;background-color:var(--rojo-soft)!important}
+
+/* Interruptor estilo iOS */
+.switch{appearance:none;-webkit-appearance:none;margin:0;width:51px;height:31px;flex:none;border-radius:999px;background:var(--fill-2);position:relative;cursor:pointer;transition:background-color 200ms ease}
+.switch::before{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#FFFFFF;box-shadow:0 2px 6px rgba(0,0,0,.18),0 0 0 .5px rgba(0,0,0,.04);transition:transform 220ms var(--ease-out)}
+.switch:checked{background:var(--accent)}
+.switch:checked::before{transform:translateX(20px)}
+.switch.sm{width:40px;height:24px}
+.switch.sm::before{width:20px;height:20px}
+.switch.sm:checked::before{transform:translateX(16px)}
+
+/* Resultado del curso */
+.hero{padding:18px;display:flex;flex-direction:column;gap:16px}
+.hero-figs{display:flex;flex-wrap:wrap;gap:14px 34px;align-items:flex-end}
+.fig .l{font-size:13px;font-weight:600;color:var(--muted)}
+.fig .v{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:54px;font-weight:700;line-height:1;letter-spacing:-0.02em;margin:5px 0 3px}
+.fig.secondary .v{font-size:34px;color:var(--ink-2)}
+.fig .s{font-size:13px;color:var(--muted)}
+.verdict{display:flex;flex-direction:column;gap:7px;align-items:flex-start}
+.verdict p{margin:0;max-width:60ch;color:var(--ink-2)}
+.verdict .hint{font-size:13px;color:var(--muted)}
+.pill{font-size:13px;font-weight:600;border-radius:999px;padding:4px 11px}
+.pill.azul{background:var(--azul-soft);color:var(--azul)} .pill.rojo{background:var(--rojo-soft);color:var(--rojo)}
+.pill.ambar{background:var(--ambar-soft);color:var(--ambar)} .pill.gris{background:var(--fill);color:var(--muted)}
+.scale{position:relative;height:42px;margin:2px 9px 0}
+.scale .track{position:absolute;left:0;right:0;top:8px;height:6px;border-radius:3px;overflow:hidden;display:flex}
+.scale .lo{background:var(--rojo-soft)} .scale .hi{background:var(--azul-soft);flex:1}
+.scale .tick{position:absolute;top:3px;width:2px;height:16px;border-radius:1px;background:var(--ink-2);transform:translateX(-1px)}
+.scale .mk{position:absolute;top:2px;width:18px;height:18px;border-radius:50%;transform:translateX(-9px)}
+.scale .mk.cur{background:var(--ink);box-shadow:0 0 0 3px var(--surface)}
+.scale .mk.need{background:var(--surface);border:2px dashed var(--ink-2)}
+.scale .lab{position:absolute;top:25px;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:11px;color:var(--muted);transform:translateX(-50%)}
+.scale .lab.pass{color:var(--ink);font-weight:700}
+
+/* Requisito PEP */
+.pepbox{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px 14px;align-items:start;border-radius:var(--r-lg);padding:16px}
+.pepbox.azul{background:var(--azul-soft)} .pepbox.ambar{background:var(--ambar-soft)} .pepbox.rojo{background:var(--rojo-soft)}
+.pb-icon{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-size:19px;font-weight:800}
+.pepbox.azul .pb-icon{background:var(--azul);color:var(--on-azul)} .pepbox.ambar .pb-icon{background:var(--ambar);color:var(--on-ambar)} .pepbox.rojo .pb-icon{background:var(--rojo);color:var(--on-rojo)}
+.pb-main{min-width:0}
+.pb-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.pepbox.azul .pb-label{color:var(--azul)} .pepbox.ambar .pb-label{color:var(--ambar)} .pepbox.rojo .pb-label{color:var(--rojo)}
+.pb-title{font-family:var(--font-display);font-size:19px;font-weight:700;letter-spacing:-0.015em;line-height:1.2;margin-top:2px;text-wrap:balance}
+.pb-main p{margin:4px 0 0;font-size:14px;color:var(--ink-2);max-width:60ch}
+.pb-chips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+.pchip{display:flex;flex-direction:column;background:var(--surface);border-radius:12px;padding:7px 14px;min-width:86px;font-size:12px;font-weight:600;color:var(--muted)}
+.pchip b{font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:26px;font-weight:700;color:var(--ink);line-height:1.15}
+.pchip.ok b{color:var(--azul)} .pchip.no b{color:var(--rojo)}
+
+/* Evaluaciones */
+.comps{display:flex;flex-direction:column;gap:12px}
+.comp{background:var(--surface);border-radius:var(--r-lg);padding:12px 14px 12px;display:flex;flex-direction:column;gap:11px}
+.comp-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+select.type{border:0;background-color:transparent;font-size:17px;font-weight:700;letter-spacing:-0.012em;padding:4px 26px 4px 0;background-position:right 6px center;max-width:100%;min-width:0}
+.comp-top .field{order:5;flex:1 1 100%;width:auto}
+.comp-top .spacer{flex:1}
+.comp-top select.type{flex:1 1 auto}
+.wpill{display:flex;align-items:center;gap:1px;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 11px 2px 4px;font-weight:700;font-family:var(--font-num)}
+.wpill input{width:42px;border:0;background:transparent;text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-weight:700;color:inherit;padding:5px 0;font-size:15px}
+.wpill input:focus{outline:none}
+.wpill:focus-within{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.comp-opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{display:flex;align-items:center;gap:4px;background:var(--fill);border-radius:10px;padding:3px 4px 3px 10px;font-size:13px;color:var(--muted);min-height:32px}
+.opt select,.opt input{border:0;background:transparent;font-size:13px;font-weight:600;color:var(--ink);padding:4px 6px;min-width:0}
+.opt select{appearance:none;-webkit-appearance:none;background-image:var(--chev);background-repeat:no-repeat;background-size:10px 7px;background-position:right 6px center;padding-right:22px}
+.opt select:disabled{opacity:.5}
+.opt input{width:46px;text-align:right;font-family:var(--font-num)}
+.opt:focus-within{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.opt.sw{padding:3px 4px 3px 10px;gap:8px}
+.grades{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px}
+.gr{position:relative;background:var(--fill);border-radius:var(--r-md);padding:8px 10px 6px;display:flex;flex-direction:column;transition:opacity 200ms ease}
+.gr:focus-within{box-shadow:inset 0 0 0 1.5px var(--accent)}
+.gr input.gl{border:0;background:transparent;font-size:12px;font-weight:600;color:var(--muted);padding:0;width:calc(100% - 22px)}
+.gr input.gv{border:0;background:transparent;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:28px;font-weight:700;letter-spacing:-0.01em;padding:0;width:100%;color:var(--ink)}
+.gr input:focus{outline:none}
+.gr input.gv::placeholder{color:var(--muted);opacity:.35}
+.gr.dropped{opacity:.5}
+.gr.dropped input.gv{text-decoration:line-through;text-decoration-thickness:2px}
+.gr.dropped::after{content:"eliminada";position:absolute;right:10px;bottom:9px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.x{width:26px;height:26px;flex:none;border-radius:999px;border:0;background:transparent;color:var(--muted);display:grid;place-items:center;font-size:17px;line-height:1;transition:opacity 150ms ease,background-color 150ms ease,transform 120ms var(--ease-out)}
+.x:active{transform:scale(.9)}
+.gr .x{position:absolute;top:3px;right:3px;width:24px;height:24px}
+.x.armed{background:var(--rojo);color:var(--on-rojo);width:auto;padding:0 10px;font-size:12px;font-weight:700}
+@media (hover:none){.gr .x{opacity:.65}}
+.addg{border:1.5px dashed var(--fill-2);background:transparent;border-radius:var(--r-md);color:var(--accent);font-weight:600;min-height:66px;transition:transform 120ms var(--ease-out),background-color 150ms ease}
+.addg:active{transform:scale(.97);background:var(--fill)}
+.wgrades{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.wgrades > .btn{align-self:flex-start}
+.wrow{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;background:var(--fill);border-radius:var(--r-md);padding:7px}
+.wrow select,.wrow input{border:0;background-color:var(--surface);border-radius:8px;padding:7px 9px;font-size:14px;min-width:0}
+.wrow select{flex:1 1 170px}
+.wrow .wname{flex:1 1 140px}
+.wrow input:focus,.wrow select:focus{outline:none;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.wpct{display:flex;align-items:center;gap:3px;color:var(--muted);font-size:13px;font-weight:600}
+.wpct input{width:58px;text-align:right;font-family:var(--font-num);font-weight:600}
+.wrow input.wv{width:76px;text-align:right;font-family:var(--font-num);font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;padding:4px 9px}
+.wrow input.wv::placeholder{font-size:13px;font-weight:500;color:var(--muted)}
+.comp-foot{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:3px 14px}
+.comp-foot b{font-family:var(--font-num);font-variant-numeric:tabular-nums;color:var(--ink);font-weight:700}
+.suf-card{box-shadow:0 0 0 1.5px var(--ambar)}
+.suf-title{font-size:17px;font-weight:700;letter-spacing:-0.012em}
+.suf-txt{margin:0;font-size:14px;color:var(--ink-2)}
+.gl-s{font-size:12px;font-weight:600;color:var(--muted)}
+.foot-hint{margin:0 6px;font-size:13px;color:var(--muted)}
+
+/* Menú de tres puntos */
+.menu-wrap{position:relative;flex:none}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;min-width:230px;background:var(--surface);border-radius:14px;padding:6px;box-shadow:0 14px 36px var(--shadow),0 0 0 1px var(--sep);transform-origin:top right;transition:opacity 160ms var(--ease-out),transform 160ms var(--ease-out)}
+@starting-style{.menu{opacity:0;transform:scale(.95)}}
+.menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:10px 12px;border-radius:9px;font-size:15px;transition:background-color 120ms ease}
+.menu button:active{background:var(--fill)}
+.menu button.danger{color:var(--rojo)}
+.menu button.danger.armed{background:var(--rojo);color:var(--on-rojo)}
+
+/* Configuración */
+.settings{display:flex;flex-direction:column;gap:14px}
+.set-top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px}
+.seg{display:grid;grid-template-columns:repeat(var(--seg-n,2),1fr);gap:2px;background:var(--fill);border-radius:10px;padding:2px;max-width:560px}
+.seg button{border:0;background:transparent;border-radius:8px;padding:8px 10px;font-size:14px;font-weight:600;color:var(--ink-2);transition:background-color 200ms ease,box-shadow 200ms ease}
+.seg button{line-height:1.2}
+.seg button[aria-selected="true"],.seg button[aria-checked="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px var(--shadow)}
+.note{margin:0;max-width:70ch;font-size:14px;color:var(--ink-2)}
+.cap{font-size:13px;color:var(--muted)}
+.lvl{background:var(--surface);border-radius:var(--r-lg);overflow:hidden}
+.lvl summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:13px 16px;font-weight:600;-webkit-user-select:none;user-select:none}
+.lvl summary::-webkit-details-marker{display:none}
+.lvl[open] summary .chev{transform:rotate(90deg)}
+.lvl summary .lvl-name{flex:1}
+.lvl summary .cnt{font-weight:500;font-size:13px;color:var(--muted)}
+.lvl-body{padding:2px 12px 14px;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.lvl-body > .btn{align-self:flex-start;margin-top:4px}
+.mrow{display:grid;grid-template-columns:96px minmax(0,1fr) 62px auto;gap:6px;align-items:center}
+.mrow.head{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);padding:2px 4px}
+.mrow .field{padding:7px 9px;font-size:14px}
+.mrow .code,.mrow .sct{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.set-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between}
+
+.imp{padding:16px;display:flex;flex-direction:column;gap:12px}
+.imp-title{font-weight:700;font-size:17px;letter-spacing:-0.01em;margin-bottom:2px}
+.imp-actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.imp-status{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;font-size:14px;background:var(--fill);border-radius:12px;padding:10px 12px}
+.imp-status .btn{margin-left:auto}
+.imp-status.err{background:var(--rojo-soft);color:var(--rojo)}
+.imp-status.ok{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.spinner{width:16px;height:16px;flex:none;border-radius:50%;border:2px solid var(--fill-2);border-top-color:var(--accent);animation:spin 700ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.imp-review{display:flex;flex-direction:column;gap:6px}
+.imp-sum{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.imp-sec{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:8px 2px 0}
+.imp-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:8px 12px;background:var(--fill);border-radius:10px;font-size:14px}
+.imp-row small{display:block;color:var(--muted);font-size:12.5px;margin-top:1px}
+.imp-row .lvl-chip{font-size:12px;font-weight:700;color:var(--muted)}
+.imp-row .imp-s{font-size:13px;color:var(--muted);white-space:nowrap}
+.imp-row.miss .imp-n{color:var(--muted);text-decoration:line-through}
+.imp-check{background:var(--fill);border-radius:10px;margin-top:2px}
+.imp-more summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--accent);padding:6px 2px}
+.imp-more .imp-row + .imp-row,.imp-more summary + .imp-row{margin-top:6px}
+.imp-review > .imp-actions{margin-top:8px}
+
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.theme-card{border:0;background:var(--surface);border-radius:var(--r-lg);padding:8px 8px 10px;display:flex;flex-direction:column;gap:8px;text-align:left;box-shadow:0 0 0 1px var(--sep);transition:transform 120ms var(--ease-out),box-shadow 150ms ease}
+.theme-card:active{transform:scale(.97)}
+.theme-card[aria-pressed="true"]{box-shadow:0 0 0 2px var(--accent)}
+.tc-prev{position:relative;height:84px;border-radius:11px;overflow:hidden;background-color:var(--p-bg);background-image:var(--p-wall);display:flex;flex-direction:column;justify-content:flex-end;gap:5px;padding:10px}
+.tc-prev i{display:block;height:9px;border-radius:4px;background:var(--p-card)}
+.tc-prev i:first-child{width:70%}
+.tc-prev b{position:absolute;top:10px;right:10px;width:22px;height:22px;border-radius:50%;background:var(--p-accent);box-shadow:0 0 0 2px var(--p-card)}
+.tc-name{font-weight:600;font-size:14px;padding:0 4px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.tc-name .ok{color:var(--accent);font-size:13px}
+.mode-seg{max-width:420px;--seg-n:3}
+
+/* Aviso breve */
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:30;max-width:calc(100% - 32px);transform:translate(-50%,8px);opacity:0;pointer-events:none;background:var(--ink);color:var(--bg);font-size:14px;font-weight:600;text-align:center;padding:10px 16px;border-radius:999px;box-shadow:0 8px 24px var(--shadow);transition:opacity 180ms var(--ease-out),transform 180ms var(--ease-out)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){.toast,.toast.show{transform:translate(-50%,0)}}
+
+/* Vacío y carga */
+.empty{padding:clamp(22px,4vw,36px);display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.empty h2{font-family:var(--font-display);font-size:24px;letter-spacing:-0.02em;margin:0}
+.empty p{margin:0;color:var(--ink-2);max-width:56ch}
+.demo-scale{display:flex;gap:6px;flex-wrap:wrap}
+.demo-scale span{font-family:var(--font-num);font-size:22px;font-weight:700;background:var(--fill);border-radius:10px;padding:4px 12px}
+.empty .side-actions{flex-direction:row;flex-wrap:wrap}
+.loading{color:var(--muted);padding:48px 4px}
+
+/* Celular: sin zoom al escribir */
+@media (pointer:coarse){
+  .field,.opt select,.opt input,.wrow select,.wrow input,.mrow .field,.gr input.gl,.wpill input{font-size:16px}
+}
+/* Hover solo con mouse */
+@media (hover:hover) and (pointer:fine){
+  .sem-head:hover,.row:hover,.past-toggle:hover{background:var(--fill)}
+  .row.active:hover{background:var(--accent-soft)}
+  .btn:hover{filter:brightness(.97)}
+  .icon-btn:hover{background:var(--fill-2)}
+  .icon-btn[aria-pressed="true"]:hover{background:var(--accent)}
+  .menu button:hover{background:var(--fill)}
+  .theme-card:hover{box-shadow:0 0 0 1px var(--fill-2)}
+  .theme-card[aria-pressed="true"]:hover{box-shadow:0 0 0 2px var(--accent)}
+  .menu button.danger.armed:hover{background:var(--rojo)}
+  .x:hover{background:var(--fill-2);color:var(--rojo)}
+  .gr .x{opacity:0}
+  .gr:hover .x,.gr:focus-within .x{opacity:1}
+  .addg:hover{background:var(--fill)}
+}
+@media (prefers-reduced-motion:reduce){
+  .pane-in{animation:fadeOnly 200ms ease}
+  .just-opened{animation:fadeOnly 150ms ease}
+  .chev,.switch::before,.pbar i{transition:none}
+  .menu{transition:opacity 120ms ease}
+  @starting-style{.menu{transform:none}}
+}
+@media (prefers-reduced-transparency:reduce){
+  .topbar{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+</style>
+
+<header class="topbar" id="topbar">
+  <div class="bar-in gutter">
+    <button class="back" data-act="back" id="back" aria-label="Volver a tus cursos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Cursos</button>
+    <button id="sidebtn" class="icon-btn side-btn" aria-label="Ocultar semestres" title="Ocultar semestres" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="3"/><path d="M9.5 4.5v15"/></svg></button>
+    <div class="bar-spacer"></div>
+    <div class="top-tabs" role="tablist" aria-label="Secciones">
+      <button id="tab-notas" role="tab" aria-selected="true" data-view="">Notas</button>
+      <button id="tab-consola" role="tab" aria-selected="false" data-view="console">Consola</button>
+    </div>
+    <div class="bar-spacer"></div>
+    <div id="save" class="save" data-s="" role="status">Conectando…</div>
+    <button id="gear" class="icon-btn" aria-label="Configuración" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  </div>
+</header>
+
+<div class="wrap gutter">
+  <section class="intro" id="intro">
+    <h1 class="large-title">Registro de Notas</h1>
+    <p class="intro-sub" id="ov-mencion"></p>
+    <div class="card summary">
+      <div class="lbl">Promedio ponderado</div>
+      <div id="ov-sub" class="sub">Sin notas todavía</div>
+      <div id="ov-big" class="big">—</div>
+      <div class="progress">
+        <div class="pbar" aria-hidden="true"><i id="ov-bar"></i></div>
+        <div class="ptxt"><span>Avance de la malla <b id="ov-pct" class="pct">0%</b></span><span id="ov-prog"></span></div>
+      </div>
+    </div>
+  </section>
+  <div id="app"><div class="loading">Cargando tus notas…</div></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+(() => {
+const LS_KEY = 'libreta-notas-v1';
+let state = { courses: [], sel: null, meta: {} };
+let ready = false;
+
+/* ---------- utilidades ---------- */
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const r1 = v => Math.round(v * 10 + 1e-9) / 10;
+const fmt = (v, d = 1) => (v == null || !isFinite(v)) ? '—' : v.toFixed(d).replace('.', ',');
+const pct = v => ((Math.min(7, Math.max(1, v)) - 1) / 6 * 100).toFixed(2) + '%';
+const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+function parseGrade(s) {
+  s = String(s ?? '').trim().replace(',', '.');
+  if (!s) return { v: null, ok: true };
+  let n = Number(s);
+  if (!isFinite(n)) return { v: null, ok: false };
+  if (Number.isInteger(n) && n >= 10 && n <= 70) n = n / 10; // "55" → 5,5
+  if (n < 1 || n > 7) return { v: null, ok: false };
+  return { v: Math.round(n * 100) / 100, ok: true };
+}
+function parseNum(s, min, max) {
+  s = String(s ?? '').trim().replace(',', '.');
+  if (!s) return { v: null, ok: true };
+  const n = Number(s);
+  if (!isFinite(n) || n < min || n > max) return { v: null, ok: false };
+  return { v: n, ok: true };
+}
+const gtxt = v => v == null ? '' : fmt(v, v * 10 % 1 ? 2 : 1);
+const ink = (v, pass) => v == null ? '' : (v >= pass - 1e-9 ? 'ink-azul' : 'ink-rojo');
+
+/* ---------- modelo ---------- */
+const SEMESTERS = [];
+for (let y = 2024; y <= 2030; y++) for (const s of ['01', '02']) SEMESTERS.push(`${y}-${s}`);
+const EVAL_TYPES = ['PEP 1', 'PEP 2', 'Controles', 'Presentaciones', 'Trabajo'];
+const OTHER = '__otra';
+const UNIQUE_TYPES = ['PEP 1', 'PEP 2'];
+const PART_TYPES = ['Entrega escrita', 'Presentación grupal', 'Presentación individual'];
+// Mallas de la carrera: [número, código, nombre, SCT]
+const MALLA_ADMIN = {
+  1: [[1,'352401','Matemáticas para la Administración y Economía I',7],[2,'352402','Taller de Computación',2],[3,'352403','Introducción a la Economía',5],[4,'352404','Introducción a la Administración',5],[5,'352405','Ética y RSE',3],[6,'352406','Contabilidad General',6],[7,'352407','Taller de Comunicaciones I',2]],
+  2: [[8,'352408','Matemáticas para la Administración y Economía II',7],[9,'352409','Álgebra Lineal',7],[10,'352410','Principios de Microeconomía',6],[11,'352411','Teoría Administrativa',5],[12,'352412','Taller de Comunicaciones II',2],[13,'352413','Inglés para la Administración y Economía I',3]],
+  3: [[14,'352414','Matemáticas para la Administración y Economía III',7],[15,'352415','Estadísticas para Administración y Economía I',6],[16,'352416','Principios de Macroeconomía',6],[17,'352417','Derecho y Empresa',3],[18,'352418','Contabilidad Financiera y Toma de Decisiones',5],[19,'352419','Inglés para la Administración y Economía II',3]],
+  4: [[20,'352420','Inferencia Estadística para Administración',5],[21,'352421','Organización Industrial',5],[22,'352422','Derecho y Empresa II',5],[23,'352423','Sistema de Costos y Toma de Decisiones',5],[24,'352424','Investigación de Operaciones',5],[25,'352425','Habilidades para la Organización I',5]],
+  5: [[26,'352426','Comportamiento Organizacional',5],[27,'352427','Finanzas I',6],[28,'352428','Marketing I',6],[29,'352429','Gestión de Operaciones',5],[30,'352430','Habilidades para la Organización II',5],[31,'352431','Inglés para la Administración y Economía III',3]],
+  6: [[32,'352432','Transformación Digital I',5],[33,'352433','Gestión de Personas I',5],[34,'352434','Finanzas II',5],[35,'352435','Marketing II',5],[36,'352436','Comportamiento Social y Toma de Decisiones',5],[37,'352437','Práctica I: Apresto Organizacional',5]],
+  7: [[38,'352438','Transformación Digital II',5],[39,'352439','Negocios y Sostenibilidad',4],[40,'352440','Acción y Sostenibilidad',4],[41,'352441','Gestión de Personas II',5],[42,'352442','Finanzas III',5],[43,'352443','Marketing III',5],[44,'352444','Inglés para la Administración y Economía IV',3]],
+  8: [[45,'352445','Transformación Digital III',5],[46,'352446','Implementación y Control Estratégico',5],[47,'352447','Capacidad Emprendedora',5],[48,'352448','Estrategia de Negocios',5],[49,'352449','Habilidades para la Organización III',5],[50,'352450','Examen de Grado',4]],
+  9: [[51,'352451','Electivo Especialidad I',6],[52,'352452','Electivo Especialidad II',6],[53,'352453','Electivo Especialidad III',6],[54,'352454','Electivo Especialidad IV',6],[55,'352455','Electivo Especialidad V',6]],
+  10: [[56,'352456','Electivo Especialidad VI',6],[57,'352457','Electivo Especialidad VII',6],[58,'352458','Práctica II: Profesional',18]]
+};
+const MALLA_ECO = {
+  1: [[1,'352401','Matemáticas para la Administración y Economía I',7],[2,'352403','Introducción a la Economía',5],[3,'352402','Taller de Computación',2],[4,'352406','Contabilidad General',6],[5,'352404','Introducción a la Administración',5],[6,'352407','Taller de Comunicaciones I',2],[7,'352405','Ética y RSE',3]],
+  2: [[8,'352408','Matemáticas para la Administración y Economía II',7],[9,'352409','Álgebra Lineal',7],[10,'352410','Principios de Microeconomía',6],[11,'352411','Teoría Administrativa',5],[12,'352412','Taller de Comunicaciones II',2],[13,'352413','Inglés para la Administración y Economía I',3]],
+  3: [[14,'352414','Matemáticas para la Administración y Economía III',7],[15,'352415','Estadísticas para Administración y Economía I',6],[16,'352416','Principios de Macroeconomía',6],[17,'352418','Contabilidad Financiera y Toma de Decisiones',5],[18,'352417','Derecho y Empresa',3],[19,'352419','Inglés para la Administración y Economía II',3]],
+  4: [[20,'352460','Métodos Cuantitativos',6],[21,'352461','Estadística para la Economía II',6],[22,'352462','Microeconomía I',5],[23,'352463','Economía Financiera I',5],[24,'352464','Comunicación Efectiva',5],[25,'352465','Inglés para la Economía III',3]],
+  5: [[26,'352466','Lenguajes de Programación para Economistas',5],[27,'352467','Econometría I',6],[28,'352468','Microeconomía II',5],[29,'352469','Macroeconomía I',6],[30,'352470','Economía Financiera II',5],[31,'352471','Inglés para la Economía IV',3]],
+  6: [[32,'352472','Econometría II',6],[33,'352473','Historia Económica',6],[34,'352474','Macroeconomía II',6],[35,'352475','Electivo I',4],[36,'352476','Electivo II',5],[37,'352477','Taller de Comunicación para Economistas',3]],
+  7: [[38,'352478','Electivo III',6],[39,'352479','Electivo IV',6],[40,'352480','Electivo V',5],[41,'352481','Electivo VI',5],[42,'352482','Electivo VII',4],[43,'352483','Taller de Habilidades I',4]],
+  8: [[44,'352484','Electivo VIII',6],[45,'352485','Electivo IX',6],[46,'352486','Electivo X',5],[47,'352487','Electivo XI',5],[48,'352488','Electivo XII',4],[49,'352489','Taller Laboral',4]],
+  9: [[50,'352493','Proyecto de Título',6],[51,'352490','Práctica Profesional',16],[52,'352491','Electivo XIII',4],[53,'352492','Inglés para la Economía V',4]],
+  10: [[54,'352497','Trabajo de Título',20],[55,'352494','Electivo XIV',4],[56,'352495','Taller de Habilidades II',2],[57,'352496','Inglés para la Economía VI',4]]
+};
+// Ingeniería Comercial tiene dos menciones; cada persona elige la suya
+const MALLAS = { admin: { label: 'Administración', data: MALLA_ADMIN }, eco: { label: 'Economía', data: MALLA_ECO } };
+const mencion = () => MALLAS[state.meta?.mencion] ? state.meta.mencion : 'admin';
+const mallaStats = k => { const l = Object.values(MALLAS[k].data).flat(); return { n: l.length, sct: l.reduce((t, r) => t + r[3], 0) }; };
+// La malla original queda como base; si la actualizas en Configuración, se usa tu versión (guardada en tu cuenta)
+const baseMalla = () => Object.entries(MALLAS[mencion()].data).flatMap(([lv, list]) => list.map(([n, code, name, sct]) => ({ id: code, lv: Number(lv), code, name, sct })));
+let RAMOS = [];
+function rebuildRamos() {
+  const src = Array.isArray(state.meta?.malla) ? state.meta.malla : baseMalla();
+  const el = state.meta?.electivos || {};
+  RAMOS = src.map(r => ({ id: r.id, lv: Number(r.lv), code: r.code, base: r.name, sct: Number(r.sct) || 0,
+    name: String(el[r.code] || '').trim() || r.name, isElec: /^electivo/i.test(String(r.name || '').trim()) }));
+}
+rebuildRamos();
+const LEVELS = () => [...new Set(RAMOS.map(r => r.lv))].sort((a, b) => a - b);
+function editableMalla() { if (!Array.isArray(state.meta.malla)) state.meta.malla = baseMalla(); return state.meta.malla; }
+// actualiza nombre, créditos y nivel de los cursos (no históricos) que usan ese ramo
+function syncCourses(code) {
+  const r = RAMOS.find(x => x.code === code); if (!r) return;
+  state.courses.forEach(c => { if (c.code === code && !c.historic) { c.name = r.name; c.credits = r.sct; c.level = r.lv; } });
+}
+const simple = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+function normSem(s) {
+  s = String(s ?? '').trim();
+  const m = s.match(/^(\d{4})\s*[-/]\s*0?([12])$/);
+  return m ? `${m[1]}-0${m[2]}` : (s || '2026-02');
+}
+const grade = (label, value = null) => ({ id: uid(), label, value });
+const comp = (name, weight, labels, opts = {}) => ({
+  id: uid(), name, weight, drop: opts.drop || 0, min: opts.min ?? null,
+  grades: labels.map((l, i) => grade(l, opts.values ? opts.values[i] ?? null : null))
+});
+function defaultComps() {
+  return [
+    comp('PEP 1', 30, ['Nota']),
+    comp('PEP 2', 30, ['Nota']),
+    comp('Controles', 40, ['C1', 'C2', 'C3', 'C4'], { drop: 1 })
+  ];
+}
+function newCourse(semester) {
+  return {
+    id: uid(), name: '', level: null, code: null, semester: normSem(semester), credits: 6, pass: 4, round: true,
+    components: defaultComps(),
+    exam: { enabled: false, weight: 30, exempt: null, value: null }
+  };
+}
+function exampleCourses() {
+  return [
+    { id: uid(), example: true, name: 'Finanzas I', semester: '2026-02', credits: 6, pass: 4, round: true,
+      components: [
+        comp('PEP 1', 30, ['Nota'], { values: [5.2] }),
+        comp('PEP 2', 30, ['Nota']),
+        comp('Controles', 20, ['C1', 'C2', 'C3', 'C4', 'C5'], { drop: 1, values: [5.5, 3.8, 6.1] }),
+        comp('Trabajo', 20, ['T1'], { values: [6.0] })
+      ],
+      exam: { enabled: true, weight: 30, exempt: 5.5, value: null } },
+    { id: uid(), example: true, name: 'Inferencia Estadística para Administración', semester: '2026-02', credits: 5, pass: 4, round: true,
+      components: [
+        comp('PEP 1', 35, ['Nota'], { values: [3.6] }),
+        comp('PEP 2', 35, ['Nota'], { values: [4.4] }),
+        comp('Controles', 30, ['C1', 'C2', 'C3', 'C4'], { drop: 1, min: 4, values: [5.0, 6.5, 4.2, 5.8] })
+      ],
+      exam: { enabled: false, weight: 30, exempt: null, value: null } },
+    { id: uid(), example: true, name: 'Sistema de Costos y Toma de Decisiones', semester: '2026-02', credits: 5, pass: 4, round: true,
+      components: [
+        comp('PEP 1', 40, ['Nota'], { values: [3.2] }),
+        comp('PEP 2', 40, ['Nota']),
+        comp('Presentaciones', 20, ['P1', 'P2', 'P3'], { values: [4.5, 5.0] })
+      ],
+      exam: { enabled: false, weight: 30, exempt: null, value: null } }
+  ];
+}
+function normalize(c) {
+  c.components = Array.isArray(c.components) ? c.components : [];
+  c.exam = Object.assign({ enabled: false, weight: 30, exempt: null, value: null }, c.exam || {});
+  if (typeof c.pass !== 'number') c.pass = 4;
+  if (typeof c.round !== 'boolean') c.round = true;
+  c.semester = normSem(c.semester);
+  c.pepReq = Object.assign({ enabled: true, min: 4 }, c.pepReq || {});
+  if (!c.code && c.name) { const r = RAMOS.find(r => simple(r.name) === simple(c.name)); if (r) { c.code = r.code; c.level = r.lv; } }
+  if (c.code) { const r = RAMOS.find(r => r.code === c.code); if (r) c.level = r.lv; }
+  if (c.level == null && c.name) c.level = 'otro';
+  if (c.level === undefined) c.level = null;
+  if (c.locked === undefined) c.locked = !!c.historic;
+  // todo ramo parte con PEP 1, PEP 2 y Controles; después se ajusta como se quiera
+  if (!c.historic && !c.components.length) c.components = defaultComps();
+  c.components.forEach(k => { k.grades = Array.isArray(k.grades) ? k.grades : []; k.drop = k.drop || 0; if (k.min === undefined) k.min = null; });
+  return c;
+}
+
+/* ---------- cálculo ---------- */
+// x = null → solo lo rendido; x = número → las notas pendientes se completan con x
+function compAvg(k, x) {
+  const total = k.grades.length; if (!total) return null;
+  if (k.weighted) {
+    // cada parte con su propia ponderación (con lo rendido, se reparte entre las partes que ya tienen nota)
+    const items = k.grades.map(g => ({ v: g.value != null ? g.value : x, w: Math.max(0, Number(g.w) || 0) })).filter(i => i.v != null);
+    if (!items.length) return null;
+    const sw = items.reduce((s, i) => s + i.w, 0);
+    return { avg: sw > 0 ? items.reduce((s, i) => s + i.v * i.w, 0) / sw : mean(items.map(i => i.v)), dropped: 0 };
+  }
+  const drop = Math.min(k.drop || 0, total - 1);
+  let vals = k.grades.map(g => g.value != null ? g.value : x).filter(v => v != null);
+  if (!vals.length) return null;
+  // con lo rendido: se eliminan las peores apenas hay notas suficientes (siempre queda al menos una)
+  const d = x == null ? Math.min(drop, vals.length - 1) : drop;
+  vals.sort((a, b) => a - b);
+  return { avg: mean(vals.slice(d)), dropped: d };
+}
+function presentation(c, x) {
+  let s = 0, sw = 0;
+  for (const k of c.components) {
+    const w = Number(k.weight) || 0; if (w <= 0) continue;
+    const a = compAvg(k, x); if (!a) continue;
+    s += a.avg * w; sw += w;
+  }
+  return sw ? s / sw : null;
+}
+function finalAt(c, x) {
+  const rnd = v => c.round ? r1(v) : v;
+  const pres = presentation(c, x); if (pres == null) return null;
+  const ex = c.exam;
+  if (!ex.enabled) return { final: pres, exempt: false };
+  if (ex.exempt != null && rnd(pres) >= ex.exempt - 1e-9) return { final: pres, exempt: true };
+  const ev = ex.value != null ? ex.value : x;
+  if (ev == null) return null;
+  const e = Math.min(100, Math.max(0, Number(ex.weight) || 0)) / 100;
+  return { final: pres * (1 - e) + ev * e, exempt: false };
+}
+const isPep = k => /^PEP\b/i.test(String(k.name || '').trim()) && k.grades.length > 0;
+function pepRule(c) { return c.pepReq || { enabled: true, min: 4 }; }
+// x = número: ¿falla el requisito si lo pendiente se completa con x?
+function pepFailAt(c, x) {
+  const r = pepRule(c); if (!r.enabled) return false;
+  const ks = c.components.filter(isPep); if (!ks.length) return false;
+  const rnd = v => c.round ? r1(v) : v;
+  return !ks.some(k => { const a = compAvg(k, x); return a && rnd(a.avg) >= r.min - 1e-9; });
+}
+// estado con lo rendido: 'ok' | 'pendiente' | 'falla' | null (no aplica)
+function pepNow(c) {
+  const r = pepRule(c); if (!r.enabled) return null;
+  const ks = c.components.filter(isPep); if (!ks.length) return null;
+  const rnd = v => c.round ? r1(v) : v;
+  const okK = ks.find(k => k.grades.every(g => g.value != null) && rnd(compAvg(k, null).avg) >= r.min - 1e-9);
+  if (okK) return { s: 'ok', k: okK };
+  if (ks.some(k => k.grades.some(g => g.value == null))) return { s: 'pendiente' };
+  return { s: 'falla' };
+}
+function reqFails(c, o) {
+  const out = o.fails.map(k => `no cumples el mínimo en ${esc(k.name)}`);
+  if (o.pepFail) out.push(`ninguna PEP llegó al ${fmt(pepRule(c).min)}`);
+  return out;
+}
+function okAt(c, x) {
+  const rnd = v => c.round ? r1(v) : v;
+  const f = finalAt(c, x); if (!f) return { ok: false, fr: null, fails: [] };
+  const fr = rnd(f.final);
+  const fails = c.components.filter(k => {
+    if (k.min == null || !k.grades.length) return false;
+    const a = compAvg(k, x); return a && rnd(a.avg) < k.min - 1e-9;
+  });
+  const pepFail = pepFailAt(c, x);
+  return { ok: fr >= c.pass - 1e-9 && !fails.length && !pepFail, fr, raw: f.final, fails, pepFail, exempt: f.exempt };
+}
+function analyze(c) {
+  const rnd = v => c.round ? r1(v) : v;
+  let total = 0, entered = 0; const dropped = new Set(), avgs = {};
+  for (const k of c.components) {
+    total += k.grades.length;
+    const e = k.grades.filter(g => g.value != null); entered += e.length;
+    const a = compAvg(k, null); avgs[k.id] = a;
+    if (a && a.dropped) [...e].sort((p, q) => p.value - q.value).slice(0, a.dropped).forEach(g => dropped.add(g.id));
+  }
+  const presAllIn = total > 0 && entered === total;
+  const pres = presentation(c, null);
+  const ex = c.exam;
+  const exemptNow = ex.enabled && ex.exempt != null && presAllIn && pres != null && rnd(pres) >= ex.exempt - 1e-9;
+  const examPending = ex.enabled && !exemptNow && ex.value == null;
+  const pending = (total - entered) + (examPending ? 1 : 0);
+  const definitive = total > 0 && pending === 0;
+  const res = { total, entered, pending, presAllIn, pres, dropped, avgs, definitive, exemptNow, examPending };
+  if (definitive) {
+    res.end = okAt(c, 1);
+    // examen de suficiencia: promedio entre 2,95 y 3,94, o 3,95 o más sin cumplir los requisitos (PEP o mínimos)
+    const e = res.end;
+    if (sufOn(c) && !e.ok && e.raw != null) {
+      const { lo, hi } = sufRange(c);
+      const req = e.fails.length > 0 || e.pepFail;
+      if ((e.raw >= lo - 1e-9 && e.raw < hi - 1e-9) || (e.raw >= hi - 1e-9 && req)) {
+        res.suf = true; res.sufReason = e.raw < hi - 1e-9 ? 'rango' : 'req';
+        const sv = c.suf?.value;
+        if (sv == null) res.sufPending = true;
+        else res.end = Object.assign({}, e, sv >= c.pass - 1e-9 ? { ok: true, fr: c.pass, viaSuf: true, sufValue: sv } : { viaSuf: true, sufValue: sv });
+      }
+    }
+  } else if (total > 0) {
+    res.needed = Infinity;
+    for (let i = 10; i <= 70; i++) { const o = okAt(c, i / 10); if (o.ok) { res.needed = i / 10; res.at = o; break; } }
+    if (res.needed === Infinity) res.at = okAt(c, 7);
+    if (res.needed === Infinity && sufOn(c)) {
+      const { lo } = sufRange(c); res.sufMin = Infinity;
+      for (let i = 10; i <= 70; i++) { const f = finalAt(c, i / 10); if (f && f.final >= lo - 1e-9) { res.sufMin = i / 10; break; } }
+    }
+    if (ex.enabled && ex.exempt != null && !presAllIn) {
+      res.exNeeded = Infinity;
+      for (let i = 10; i <= 70; i++) { const p = presentation(c, i / 10); if (p != null && rnd(p) >= ex.exempt - 1e-9) { res.exNeeded = i / 10; break; } }
+    }
+  }
+  // nota que representa al curso (final o parcial)
+  res.show = definitive ? (res.end ? res.end.fr : null) : (pres != null ? pres : null);
+  res.partial = !definitive;
+  return res;
+}
+const sufOn = c => !c.historic && c.sufRule !== false;
+const sufRange = c => ({ lo: c.pass - 1.05, hi: c.pass - 0.05 });
+function statusOf(c, A) {
+  if (!A.total) return { tone: 'gris', text: 'Sin notas' };
+  if (A.definitive) {
+    if (A.sufPending) return { tone: 'ambar', text: 'Examen de suficiencia' };
+    return A.end && A.end.ok ? { tone: 'azul', text: A.end.viaSuf ? 'Aprobado por suficiencia' : A.end.exempt ? 'Aprobado · eximido' : 'Aprobado' } : { tone: 'rojo', text: 'Reprobado' };
+  }
+  const n = A.needed;
+  if (n <= 1) return { tone: 'azul', text: 'Aprobado asegurado' };
+  if (n === Infinity) return A.sufMin != null && A.sufMin !== Infinity ? { tone: 'ambar', text: 'Iría a suficiencia' } : { tone: 'rojo', text: 'No alcanza' };
+  if (n <= c.pass) return { tone: 'azul', text: 'Bien encaminado' };
+  if (n <= 5.5) return { tone: 'ambar', text: 'Atención' };
+  return { tone: 'rojo', text: 'En riesgo' };
+}
+
+/* ---------- render ---------- */
+const app = document.getElementById('app');
+const cur = () => state.courses.find(c => c.id === state.sel) || null;
+const OPEN_KEY = 'libreta-semestres-abiertos';
+let openSems = new Set();
+try { openSems = new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || '[]')); } catch (_) {}
+function saveOpen() { try { localStorage.setItem(OPEN_KEY, JSON.stringify([...openSems])); } catch (_) {} }
+function openSem(s) { if (s && !openSems.has(s)) { openSems.add(s); saveOpen(); } }
+const isFailed = c => { const A = analyze(c); return A.definitive && !A.sufPending && !(A.end && A.end.ok); };
+const isPassed = c => { const A = analyze(c); return A.definitive && !!(A.end && A.end.ok); };
+let showFailed = false, showPast = false;
+try { showPast = localStorage.getItem('libreta-ver-anteriores') === '1'; } catch (_) {}
+try { showFailed = localStorage.getItem('libreta-ver-reprobados') === '1'; } catch (_) {}
+// semestre académico en curso: marzo–julio = 01, agosto–enero = 02
+// semestre según la fecha (solo para partir): marzo–julio = 01, agosto–enero = 02
+function dateSem() { const d = new Date(), y = d.getFullYear(), m = d.getMonth() + 1; return m >= 8 ? `${y}-02` : m <= 1 ? `${y - 1}-02` : `${y}-01`; }
+// el semestre actual avanza solo cuando todos sus ramos tienen todas sus notas
+function currentSem() { return state.meta.curSem || dateSem(); }
+function nextSem(s) { const [y, n] = String(s).split('-').map(Number); return n >= 2 ? `${y + 1}-01` : `${y}-02`; }
+function isFinished(c) { const A = analyze(c); return A.definitive && !A.sufPending; }
+function checkAdvance() {
+  if (!state.meta.curSem) { state.meta.curSem = dateSem(); scheduleSave(); }
+  const from = state.meta.curSem;
+  for (let i = 0; i < 6; i++) {
+    const cs = state.courses.filter(c => c.semester === state.meta.curSem);
+    if (!cs.length || !cs.every(isFinished)) break;
+    state.meta.curSem = nextSem(state.meta.curSem);
+  }
+  if (state.meta.curSem === from) return false;
+  openSem(state.meta.curSem);
+  toast(`Terminaste ${from}. Tu semestre actual ahora es ${state.meta.curSem}.`);
+  scheduleSave();
+  return true;
+}
+// ramos que se pueden elegir para un curso: se quitan los aprobados en semestres anteriores y los que ya están en ese mismo semestre
+function availableRamos(c) {
+  const passed = new Set(state.courses.filter(x => x.id !== c.id && x.code && (x.semester || '') < (c.semester || '') && isPassed(x)).map(x => x.code));
+  const same = new Set(state.courses.filter(x => x.id !== c.id && x.code && x.semester === c.semester).map(x => x.code));
+  return RAMOS.filter(r => r.code === c.code || (!passed.has(r.code) && !same.has(r.code)));
+}
+function ensureSel() {
+  if (cur()) return;
+  const now = currentSem();
+  const list = state.courses.filter(c => !isFailed(c)).sort((a, b) => ((b.semester === now) - (a.semester === now)) || (b.semester || '').localeCompare(a.semester || ''));
+  state.sel = (list[0] || state.courses[0])?.id || null;
+}
+
+const ICON = {
+  chev: '<svg class="chev" viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  dots: '<svg width="18" height="4" viewBox="0 0 18 4" aria-hidden="true"><circle cx="2" cy="2" r="2" fill="currentColor"/><circle cx="9" cy="2" r="2" fill="currentColor"/><circle cx="16" cy="2" r="2" fill="currentColor"/></svg>'
+};
+// navegación: en celular se ve la lista o el curso; en escritorio, ambos
+let justOpened = null, animatePane = false, listScroll = 0;
+let focusMode = false;
+try { focusMode = localStorage.getItem('libreta-enfoque') === '1'; } catch (_) {}
+const isNarrow = () => matchMedia('(max-width: 899px)').matches;
+function applyPane() {
+  const grid = app.querySelector('.grid');
+  const pane = state.pane === 'detail' && cur() ? 'detail' : 'list';
+  if (grid) grid.dataset.pane = pane;
+  document.body.classList.toggle('is-detail', !!grid && pane === 'detail');
+  document.body.classList.toggle('is-settings', state.view === 'settings');
+  document.body.classList.toggle('is-console', state.view === 'console');
+  document.body.classList.toggle('is-focus', focusMode && !state.view && !!grid);
+  const sb = document.getElementById('sidebtn');
+  if (sb) { const t = focusMode ? 'Mostrar semestres' : 'Ocultar semestres'; sb.setAttribute('aria-pressed', String(focusMode)); sb.setAttribute('aria-label', t); sb.title = t; }
+  document.getElementById('tab-notas')?.setAttribute('aria-selected', String(!state.view));
+  document.getElementById('tab-consola')?.setAttribute('aria-selected', String(state.view === 'console'));
+  document.getElementById('gear')?.setAttribute('aria-pressed', String(state.view === 'settings'));
+}
+function render() {
+  applyTheme();
+  rebuildRamos();
+  if (ready && API_SET && (!API || !remote.user)) { document.body.classList.add('is-login'); app.innerHTML = API ? loginHTML() : setupHTML(); applyPane(); return; }
+  document.body.classList.remove('is-login');
+  if (ready) checkAdvance();
+  ensureSel();
+  if (!ready) { app.innerHTML = '<div class="loading">Cargando tus notas…</div>'; applyPane(); return; }
+  if (state.view === 'settings') { app.innerHTML = settingsHTML(); renderHeader(); applyPane(); return; }
+  if (state.view === 'console') { app.innerHTML = consoleHTML(); renderHeader(); applyPane(); conHint(); return; }
+  if (!state.courses.length) { app.innerHTML = emptyHTML(); renderHeader(); applyPane(); return; }
+  app.innerHTML = `<div class="grid"><aside class="side" id="side" aria-label="Tus cursos"></aside><main id="main"></main></div>`;
+  renderSide(); renderMain(); renderHeader(); applyPane();
+}
+/* ---------- configuración: malla y electivos ---------- */
+const openLvls = new Set();
+function settingsHTML() {
+  const tab = state.tab || 'malla';
+  return `<section class="settings">
+    <div class="set-top"><h1 class="large-title">Configuración</h1><button class="btn plain" data-act="close-settings">Listo</button></div>
+    <div class="seg" style="--seg-n:4" role="tablist" aria-label="Secciones de configuración">
+      <button role="tab" aria-selected="${tab === 'malla'}" data-act="set-tab" data-tab="malla">Actualizar malla</button>
+      <button role="tab" aria-selected="${tab === 'electivos'}" data-act="set-tab" data-tab="electivos">Actualizar electivos</button>
+      <button role="tab" aria-selected="${tab === 'temas'}" data-act="set-tab" data-tab="temas">Temas</button>
+      <button role="tab" aria-selected="${tab === 'respaldo'}" data-act="set-tab" data-tab="respaldo">Respaldo</button>
+    </div>
+    ${tab === 'temas' ? temasHTML() : tab === 'respaldo' ? respaldoHTML() : impHTML(tab) + (tab === 'malla' ? mallaHTML() : electivosHTML())}
+  </section>`;
+}
+function mallaHTML() {
+  const total = RAMOS.reduce((s, r) => s + r.sct, 0);
+  const menCard = `<div class="card imp"><div><div class="imp-title">Tu mención</div><div class="cap">Ingeniería Comercial tiene dos mallas. Al cambiar de mención se carga la malla original de esa mención; tus cursos y notas se mantienen.</div></div>${mencionCards(true)}</div>`;
+  const lv = LEVELS().map(l => {
+    const list = RAMOS.filter(r => r.lv === l);
+    const sct = list.reduce((s, r) => s + r.sct, 0);
+    return `<details class="lvl" data-lv="${l}" ${openLvls.has(l) ? 'open' : ''}>
+      <summary>${ICON.chev}<span class="lvl-name">Nivel ${l}</span><span class="cnt">${list.length} ${list.length === 1 ? 'ramo' : 'ramos'} · ${sct} SCT</span></summary>
+      <div class="lvl-body">
+        <div class="mrow head"><span>Código</span><span>Nombre del ramo</span><span>SCT</span><span></span></div>
+        ${list.map(r => `<div class="mrow">
+          <input id="m-c-${esc(r.id)}" class="field code" data-s="code" data-row="${esc(r.id)}" value="${esc(r.code)}" aria-label="Código">
+          <input id="m-n-${esc(r.id)}" class="field" data-s="name" data-row="${esc(r.id)}" value="${esc(r.base)}" aria-label="Nombre del ramo">
+          <input id="m-s-${esc(r.id)}" class="field sct" data-s="sct" data-row="${esc(r.id)}" inputmode="numeric" value="${esc(r.sct)}" aria-label="Créditos SCT">
+          <button class="x" data-act="del-ramo" data-row="${esc(r.id)}" aria-label="Quitar ramo">×</button>
+        </div>`).join('')}
+        <button class="btn tinted small" data-act="add-ramo" data-lv="${l}">Agregar ramo al nivel ${l}</button>
+      </div>
+    </details>`;
+  }).join('');
+  return `${menCard}<p class="note">Si la carrera cambia la malla, corrige aquí los nombres, códigos y créditos, quita los ramos que ya no existen o agrega los que los reemplazan. Los cambios se guardan solos, se usan al elegir ramos y actualizan los cursos que tienes en curso. Las notas de la cartola conservan el nombre con que las rendiste.</p>
+    <div class="cap">${RAMOS.length} ramos · ${total} SCT en total</div>
+    ${lv}
+    <div class="set-actions"><button class="btn tinted small" data-act="add-level">Agregar nivel</button>${Array.isArray(state.meta.malla) ? '<button class="btn danger small" data-act="reset-malla">Restaurar malla original</button>' : ''}</div>`;
+}
+function electivosHTML() {
+  const list = RAMOS.filter(r => r.isElec);
+  if (!list.length) return `<p class="note">Tu malla no tiene ramos que se llamen “Electivo”. Si agregas uno en Actualizar malla, aparecerá aquí.</p>`;
+  const el = state.meta.electivos || {};
+  return `<p class="note">Cuando sepas qué electivo vas a tomar, escribe su nombre, por ejemplo Neuromarketing o Finanzas Corporativas. Ese nombre aparece al elegir el ramo y en tus cursos. Si lo dejas vacío, sigue llamándose Electivo Especialidad.</p>
+    <div class="group">${list.map(r => `<label class="rowf stack">
+      <span class="lbl"><b style="color:var(--ink);font-weight:600">${esc(r.base)}</b> · Nivel ${r.lv} · ${r.sct} SCT</span>
+      <input id="e-${esc(r.id)}" class="field" data-s="elec" data-code="${esc(r.code)}" value="${esc(el[r.code] || '')}" placeholder="Ej.: Neuromarketing">
+    </label>`).join('')}</div>`;
+}
+function settingsInput(el) {
+  const s = el.dataset.s;
+  const bad = ok => el.classList.toggle('bad', !ok);
+  if (s === 'elec') {
+    state.meta.electivos = Object.assign({}, state.meta.electivos, { [el.dataset.code]: el.value });
+    rebuildRamos(); syncCourses(el.dataset.code);
+  } else {
+    const m = editableMalla(); const row = m.find(r => r.id === el.dataset.row); if (!row) return;
+    if (s === 'name') row.name = el.value;
+    if (s === 'sct') { const p = parseNum(el.value, 0, 60); bad(p.ok); if (!p.ok) return; row.sct = p.v ?? 0; }
+    if (s === 'code') {
+      const v = el.value.trim();
+      const ok = !!v && !m.some(r => r !== row && r.code === v); bad(ok); if (!ok) return;
+      const old = row.code; row.code = v;
+      state.courses.forEach(c => { if (c.code === old) c.code = v; });
+      if (state.meta.electivos && old in state.meta.electivos) { const e = Object.assign({}, state.meta.electivos); e[v] = e[old]; delete e[old]; state.meta.electivos = e; }
+    }
+    rebuildRamos(); syncCourses(row.code);
+  }
+  renderHeader(); scheduleSave();
+}
+/* ---------- consola: registrar una nota rápido ---------- */
+function consoleCourses() {
+  const now = currentSem();
+  return state.courses.filter(c => !c.historic && c.components.length)
+    .sort((a, b) => ((b.semester === now) - (a.semester === now)) || (b.semester || '').localeCompare(a.semester || '') || String(a.name).localeCompare(String(b.name)));
+}
+function evalSlots(c) {
+  const out = [];
+  c.components.forEach(k => {
+    const name = k.name || 'Evaluación';
+    k.grades.forEach(g => out.push({ key: k.id + '|' + g.id, label: k.grades.length === 1 && !k.weighted ? name : `${name} · ${g.label || 'nota'}`, value: g.value }));
+    if (!k.weighted) out.push({ key: k.id + '|new', label: `${name} · agregar otra nota`, value: null, isNew: true });
+  });
+  if (c.exam.enabled) out.push({ key: 'exam', label: 'Examen', value: c.exam.value });
+  if (analyze(c).suf) out.push({ key: 'suf', label: 'Examen de suficiencia', value: c.suf?.value ?? null });
+  return out;
+}
+function conState() {
+  const list = consoleCourses();
+  state.con ||= {};
+  let c = list.find(x => x.id === state.con.cid) || list[0] || null;
+  if (!c) return { list, c: null, slots: [], slot: null };
+  state.con.cid = c.id;
+  const slots = evalSlots(c);
+  let slot = slots.find(s => s.key === state.con.key);
+  if (!slot) { slot = slots.find(s => s.value == null && !s.isNew) || slots[0]; state.con.key = slot?.key; }
+  return { list, c, slots, slot };
+}
+function consoleHTML() {
+  const { list, c, slots, slot } = conState();
+  const log = Array.isArray(state.meta.log) ? state.meta.log : [];
+  if (!c) return `<section class="console"><h1 class="large-title">Consola</h1><div class="card empty"><h2>Todavía no hay cursos para registrar notas</h2><p>Crea en Notas los cursos que estás rindiendo, con sus evaluaciones. Después vuelve aquí para anotar cada nota en segundos.</p><div class="side-actions"><button class="btn primary" data-act="go-notes">Ir a Notas</button></div></div></section>`;
+  const groups = {};
+  list.forEach(x => (groups[x.semester] ||= []).push(x));
+  const ramoOpts = Object.keys(groups).sort((a, b) => ((b === currentSem()) - (a === currentSem())) || b.localeCompare(a)).map(s => `<optgroup label="Semestre ${esc(s)}">${groups[s].map(x => `<option value="${x.id}" ${x.id === c.id ? 'selected' : ''}>${esc(x.name || 'Nuevo curso')}</option>`).join('')}</optgroup>`).join('');
+  const evalOpts = slots.map(s => `<option value="${esc(s.key)}" ${s.key === slot?.key ? 'selected' : ''}>${esc(s.label)}${s.value != null ? ` — tiene ${fmt(s.value)}` : ''}</option>`).join('');
+  const rowHTML = e => {
+    const exists = state.courses.some(x => x.id === e.cid);
+    const d = new Date(e.t);
+    const when = d.toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const acts = e.undone
+      ? `${exists ? `<button class="btn plain" data-act="con-redo" data-id="${e.id}">Restaurar nota</button>` : ''}<button class="btn plain" data-act="con-forget" data-id="${e.id}">Borrar del registro</button>`
+      : exists ? `<button class="btn plain" data-act="con-open" data-id="${e.id}">Ver en el curso</button><button class="btn plain" data-act="con-undo" data-id="${e.id}">Deshacer</button>` : '';
+    return `<div class="logrow ${e.undone ? 'undone' : ''} ${state.con.flash === e.id ? 'flash' : ''}">
+      <div class="lmain"><b>${esc(e.course)}</b><span class="ls">${esc(e.eval)}${e.v == null ? ` · nota borrada${e.prev != null ? ' (era ' + fmt(e.prev) + ')' : ''}` : e.prev != null ? ` · reemplazó un ${fmt(e.prev)}` : ''}</span><span class="lt">${esc(when)} · ${e.src === 'curso' ? 'en el curso' : 'en la consola'}${e.undone && e.undoneAt ? ' · deshecha el ' + esc(new Date(e.undoneAt).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })) : ''}</span></div>
+      <div class="lv ${ink(e.v, 4)}">${fmt(e.v)}</div>
+      ${acts ? `<div class="lact">${acts}</div>` : ''}
+    </div>`;
+  };
+  const active = log.filter(e => !e.undone), trash = log.filter(e => e.undone);
+  const rows = active.map(rowHTML).join('');
+  const trashHTML = trash.length ? `<button class="past-toggle" data-act="con-trash" aria-expanded="${!!state.con.showTrash}">${ICON.chev}<span>Papelera</span><span class="past-n">${trash.length}</span></button>
+    ${state.con.showTrash ? `<div class="trash ${state.con.trashOpened ? 'just-opened' : ''}"><p class="cap">Notas que deshiciste. Ya no cuentan en tus cursos; puedes restaurarlas o borrarlas del registro.</p><div class="group">${trash.map(rowHTML).join('')}</div><button class="btn danger small" data-act="con-empty">Vaciar papelera</button></div>` : ''}` : '';
+  state.con.trashOpened = false;
+  state.con.flash = null;
+  return `<section class="console">
+    <h1 class="large-title">Consola</h1>
+    <p class="note">Elige el ramo y la evaluación, escribe la nota y queda guardada al tiro en el curso, con su promedio recalculado.</p>
+    <form class="group con-form" id="con-form" autocomplete="off">
+      <label class="rowf stack"><span class="lbl">Ramo</span><select id="con-ramo" class="field">${ramoOpts}</select></label>
+      <label class="rowf stack"><span class="lbl">Evaluación</span><select id="con-eval" class="field">${evalOpts}</select></label>
+      <div class="rowf stack"><label class="lbl" for="con-nota">Nota</label>
+        <div class="con-nota-row"><input id="con-nota" class="field con-nota" inputmode="decimal" placeholder="5,5" enterkeyhint="done" aria-describedby="con-hint"><button type="submit" class="btn primary">Registrar nota</button></div>
+        <div id="con-hint" class="con-hint" role="status"></div>
+      </div>
+    </form>
+    <div id="con-preview" class="card con-preview">${conPreviewHTML(c)}</div>
+    <div class="sec"><span>Registro</span></div>
+    <div class="group">${rows || `<div class="log-empty">${trash.length ? 'No hay notas activas en el registro.' : 'Aquí aparecerán las notas que registres, con fecha y hora.'}</div>`}</div>
+    ${trashHTML}
+  </section>`;
+}
+function conPreviewHTML(c) {
+  const A = analyze(c), st = statusOf(c, A);
+  const need = !A.definitive && A.total ? (A.needed === Infinity ? 'necesitas más de 7,0' : A.needed <= 1 ? 'ya tienes el curso asegurado' : `necesitas ${fmt(A.needed)} en lo pendiente`) : '';
+  return `<div class="cp-name">${esc(c.name || 'Nuevo curso')}</div>
+    <div class="cp-sub"><span class="pill ${st.tone}">${st.text}</span><span>${A.definitive ? 'nota final' : 'promedio a la fecha'}${need ? ' · ' + need : ''}</span></div>
+    <div class="cp-num ${ink(A.show, c.pass)}">${fmt(A.show, A.definitive ? 1 : 2)}</div>`;
+}
+function conHint() {
+  const inp = document.getElementById('con-nota'), h = document.getElementById('con-hint'); if (!inp || !h) return;
+  const { slot } = conState();
+  const p = parseGrade(inp.value);
+  inp.classList.toggle('bad', !p.ok);
+  h.classList.toggle('err', !p.ok);
+  if (!p.ok) h.textContent = 'La nota debe estar entre 1,0 y 7,0. Puedes escribir 5,5 · 5.5 · o 55.';
+  else if (slot?.value != null) h.textContent = `Esta evaluación ya tiene un ${fmt(slot.value)}; la nueva nota lo reemplaza.`;
+  else h.textContent = '';
+}
+function conSubmit() {
+  const { c, slot } = conState(); if (!c || !slot) return;
+  const inp = document.getElementById('con-nota');
+  const p = parseGrade(inp.value);
+  if (!p.ok || p.v == null) { inp.classList.add('bad'); const h = document.getElementById('con-hint'); h.classList.add('err'); h.textContent = 'Escribe una nota entre 1,0 y 7,0.'; inp.focus(); return; }
+  let prev = null, gid = 'exam', label = slot.label;
+  if (slot.key === 'exam') { prev = c.exam.value; c.exam.value = p.v; }
+  else if (slot.key === 'suf') { prev = c.suf?.value ?? null; c.suf = { value: p.v }; gid = 'suf'; }
+  else {
+    const [kid, id] = slot.key.split('|'); const k = findComp(c, kid); if (!k) return;
+    let g;
+    if (id === 'new') { g = grade(((k.name || 'N').trim()[0] || 'N').toUpperCase() + (k.grades.length + 1)); k.grades.push(g); label = `${k.name || 'Evaluación'} · ${g.label}`; }
+    else g = k.grades.find(x => x.id === id);
+    if (!g) return;
+    prev = g.value; g.value = p.v; gid = g.id;
+  }
+  const entry = { id: uid(), t: Date.now(), cid: c.id, gid, course: c.name || 'Nuevo curso', eval: label, v: p.v, prev, src: 'consola' };
+  state.meta.log = [entry, ...(Array.isArray(state.meta.log) ? state.meta.log : [])].slice(0, 60);
+  state.con.flash = entry.id; state.con.key = null; // pasa a la siguiente evaluación sin nota
+  scheduleSave(); render();
+  document.getElementById('con-nota')?.focus();
+}
+function conRedo(id) {
+  const e = (state.meta.log || []).find(x => x.id === id); if (!e || !e.undone) return;
+  const c = state.courses.find(x => x.id === e.cid); if (!c) return;
+  let done = false;
+  if (e.gid === 'exam') { if (c.exam.value === e.prev) { c.exam.value = e.v; done = true; } }
+  else if (e.gid === 'suf') { if ((c.suf?.value ?? null) === e.prev) { c.suf = { value: e.v }; done = true; } }
+  else for (const k of c.components) { const g = k.grades.find(x => x.id === e.gid); if (g && g.value === e.prev) { g.value = e.v; done = true; } }
+  if (!done) { toast('Esa evaluación cambió después; no restauré la nota.'); return; }
+  state.meta.log = state.meta.log.map(x => x.id === id ? Object.assign({}, x, { undone: false, undoneAt: null }) : x);
+  state.con.flash = id; toast('Nota restaurada.');
+  scheduleSave(); render();
+}
+function conUndo(id) {
+  const e = (state.meta.log || []).find(x => x.id === id); if (!e || e.undone) return;
+  const c = state.courses.find(x => x.id === e.cid); if (!c) return;
+  if (e.gid === 'exam') { if (c.exam.value === e.v) c.exam.value = e.prev; }
+  else if (e.gid === 'suf') { if ((c.suf?.value ?? null) === e.v) c.suf = { value: e.prev }; }
+  else { for (const k of c.components) { const g = k.grades.find(x => x.id === e.gid); if (g && g.value === e.v) g.value = e.prev; } }
+  state.meta.log = state.meta.log.map(x => x.id === id ? Object.assign({}, x, { undone: true, undoneAt: Date.now() }) : x);
+  toast('Nota deshecha. Quedó en la papelera.');
+  scheduleSave(); render();
+}
+/* ---------- importar malla y electivos desde una foto o un archivo ---------- */
+let sampler = null, samplerImages = null;
+const LIBS = {};
+const XLSX_URL = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+const MAMMOTH_URL = 'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js';
+function loadLib(url, name) {
+  if (window[name]) return Promise.resolve(window[name]);
+  return LIBS[url] ||= new Promise((res, rej) => {
+    const s = document.createElement('script'); s.src = url;
+    s.onload = () => window[name] ? res(window[name]) : rej({ code: 'lib' });
+    s.onerror = () => { delete LIBS[url]; rej({ code: 'lib' }); };
+    document.head.appendChild(s);
+  });
+}
+async function initSampler() {
+  const C = window.claude; if (!C || typeof C.use !== 'function') return;
+  try { sampler = await C.use('sample'); } catch (_) { sampler = null; }
+  if (sampler) { try { samplerImages = (await sampler.limits())?.images || null; } catch (_) { samplerImages = null; } }
+  if (state.view === 'settings') render();
+}
+function impHTML(tab) {
+  const imp = state.imp && state.imp.tab === tab ? state.imp : null;
+  const canPhoto = !!(sampler && samplerImages);
+  const what = tab === 'malla' ? 'la malla' : 'los electivos';
+  let body = '';
+  if (imp?.status === 'reading') body = `<div class="imp-status" role="status"><span class="spinner" aria-hidden="true"></span><span>${esc(imp.msg)}</span><button class="btn plain small" data-act="imp-stop">Detener</button></div>`;
+  else if (imp?.status === 'error') body = `<div class="imp-status err" role="alert">${esc(imp.msg)}</div>`;
+  else if (imp?.status === 'ok') body = `<div class="imp-status ok" role="status">${esc(imp.msg)}</div>`;
+  else if (imp?.status === 'review') body = tab === 'malla' ? mallaReviewHTML(imp) : elecReviewHTML(imp);
+  const busy = imp?.status === 'reading' ? 'disabled' : '';
+  return `<div class="card imp">
+    <div><div class="imp-title">Actualizar ${what} automáticamente</div>
+      <div class="cap">${tab === 'malla'
+        ? 'Sube una foto de la malla, un Excel o CSV con columnas Nivel, Código, Nombre y SCT, o un documento Word o de texto. Revisas los cambios antes de aplicarlos.'
+        : 'Sube una foto o un archivo con los nombres de tus electivos, en orden. Los que ya tengas se mantienen y los nuevos ocupan los electivos vacíos.'}</div></div>
+    <div class="imp-actions">
+      <button class="btn primary small" data-act="imp-photo" ${canPhoto && !busy ? '' : 'disabled'}>Subir foto</button>
+      <button class="btn tinted small" data-act="imp-file" ${busy}>Subir Excel o documento</button>
+      <input type="file" id="imp-photo-in" accept="${esc((samplerImages?.mediaTypes || ['image/jpeg', 'image/png', 'image/webp']).join(','))}" ${(samplerImages?.maxCount || 1) > 1 ? 'multiple' : ''} hidden>
+      <input type="file" id="imp-file-in" accept=".xlsx,.xls,.csv,.txt,.md,.docx" hidden>
+    </div>
+    ${canPhoto ? '' : `<div class="cap">${sampler ? 'Leer fotos no está disponible aquí.' : 'Leer fotos y documentos necesita que la app pueda usar Claude, y eso no está disponible aquí.'} Un Excel o CSV con columnas ${tab === 'malla' ? 'Nivel, Código, Nombre y SCT' : 'con los nombres'} funciona igual.</div>`}
+    ${body}
+  </div>`;
+}
+function impErr(e) {
+  const m = {
+    not_granted: 'La app no tiene permiso para usar Claude, así que no puede leer fotos ni documentos. Recarga la página si quieres permitirlo, o sube un Excel con columnas.',
+    sampling_disabled: 'La lectura automática no está disponible en esta cuenta. Sube un Excel o CSV con columnas.',
+    images_unavailable: 'Leer fotos no está disponible aquí. Sube un Excel o CSV con columnas.',
+    rate_limited: 'Llegaste al límite de uso de Claude por ahora. Intenta de nuevo más tarde.',
+    image_rejected: 'No pude abrir esa imagen. Prueba con una foto JPG o PNG más nítida.',
+    refused: 'Claude no pudo procesar ese archivo. Prueba con otra foto o archivo.',
+    prompt_too_large: 'El archivo es demasiado largo. Deja solo la tabla de ramos e intenta de nuevo.',
+    formato: 'No puedo leer ese tipo de archivo. Usa una foto, un Excel (.xlsx), un CSV, un Word (.docx) o un .txt.',
+    noai: 'Para leer documentos de texto la app necesita usar Claude, y eso no está disponible aquí. Sube un Excel o CSV con columnas.',
+    lib: 'No se pudo cargar el lector de archivos. Revisa tu conexión e intenta de nuevo.',
+    nada: 'No encontré ramos en lo que subiste. Prueba con una foto más nítida o un Excel con columnas Nivel, Código, Nombre y SCT.'
+  };
+  const code = e?.code;
+  if (code === 'invalid_json' || code === 'empty_completion') return m.nada;
+  if (code === 'capability_disabled' || code === 'capability_removed' || code === 'not_declared') return m.sampling_disabled;
+  return m[code] || 'Hubo un problema al leer el archivo. Intenta de nuevo.';
+}
+async function runImport(tab, kind, files) {
+  if (!files.length) return;
+  const ctl = new AbortController();
+  state.imp = { tab, status: 'reading', ctl, msg: kind === 'photo' ? 'Leyendo la foto… puede tardar hasta un minuto.' : 'Leyendo el archivo…' };
+  render();
+  try {
+    const items = kind === 'photo'
+      ? await aiExtract(tab, { images: files.slice(0, samplerImages?.maxCount || 1) }, ctl.signal)
+      : await fileExtract(tab, files[0], ctl.signal);
+    if (!items || !items.length) throw { code: 'nada' };
+    const result = tab === 'malla' ? diffMalla(items) : diffElec(items);
+    if (tab === 'malla' && !result.rows.length) throw { code: 'nada' };
+    state.imp = { tab, status: 'review', result, removeMissing: true };
+  } catch (e) {
+    state.imp = e?.code === 'cancelled' ? null : { tab, status: 'error', msg: impErr(e) };
+  }
+  if (state.view === 'settings') render();
+}
+async function aiExtract(tab, src, signal) {
+  if (!sampler) throw { code: 'noai' };
+  const intro = src.images ? 'Te paso una o más fotos' : 'Te paso el contenido de un archivo';
+  const prompt = tab === 'malla'
+    ? `${intro} de la malla curricular de una carrera universitaria chilena. Extrae TODOS los ramos que aparecen.
+Responde solo con un arreglo JSON de objetos con esta forma:
+[{"nivel": 1, "codigo": "352401", "nombre": "Contabilidad General", "sct": 6}]
+- "nivel": número entero del nivel o semestre de la malla (en una foto de malla, cada columna suele ser un nivel).
+- "codigo": el código del ramo como texto, o null si no aparece.
+- "nombre": el nombre del ramo tal como está escrito, uniendo las palabras cortadas en varias líneas.
+- "sct": los créditos SCT como número (por ejemplo de "SCT:5"), o null si no aparecen.
+No incluyas requisitos, horas ni colores, y no inventes ramos.`
+    : `${intro} con los cursos electivos que va a tomar un estudiante universitario. Extrae los nombres de esos electivos en el orden en que aparecen.
+Responde solo con un arreglo JSON de objetos con esta forma:
+[{"nombre": "Neuromarketing", "nivel": 9, "sct": 6}]
+"nivel" y "sct" son números, o null si no aparecen. No incluyas nombres genéricos como "Electivo Especialidad I" y no inventes cursos.`;
+  const input = src.text != null ? `${prompt}\n\nContenido del archivo:\n${String(src.text).slice(0, 60000)}` : prompt;
+  const opts = { signal };
+  if (src.images) opts.images = src.images;
+  const data = await sampler.json(input, opts);
+  return Array.isArray(data) ? data : Array.isArray(data?.ramos) ? data.ramos : Array.isArray(data?.electivos) ? data.electivos : [];
+}
+async function fileExtract(tab, file, signal) {
+  const name = (file.name || '').toLowerCase();
+  if (/\.(xlsx|xls|csv)$/.test(name)) {
+    const XLSX = await loadLib(XLSX_URL, 'XLSX');
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const rows = wb.SheetNames.flatMap(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, blankrows: false, defval: '' }));
+    const direct = tab === 'malla' ? rowsToMalla(rows) : rowsToElec(rows);
+    if (direct.length) return direct;
+    if (!sampler) throw { code: 'nada' };
+    return aiExtract(tab, { text: rows.map(r => r.join(' | ')).join('\n') }, signal);
+  }
+  if (/\.docx$/.test(name)) {
+    const mammoth = await loadLib(MAMMOTH_URL, 'mammoth');
+    const { value } = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+    if (!sampler) { if (tab === 'electivos') return linesToElec(value); throw { code: 'noai' }; }
+    return aiExtract(tab, { text: value }, signal);
+  }
+  if (/\.(txt|md)$/.test(name) || (file.type || '').startsWith('text/')) {
+    const text = await file.text();
+    if (!sampler) { if (tab === 'electivos') return linesToElec(text); throw { code: 'noai' }; }
+    return aiExtract(tab, { text }, signal);
+  }
+  if ((file.type || '').startsWith('image/')) return aiExtract(tab, { images: [file] }, signal);
+  throw { code: 'formato' };
+}
+const findCol = (h, re) => h.findIndex(x => re.test(simple(x)));
+const toNum = v => { const s = String(v ?? '').replace(',', '.').replace(/[^\d.]/g, ''); return s ? Number(s) : null; };
+function rowsToMalla(rows) {
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const h = rows[i].map(String);
+    const cN = findCol(h, /^(nombre|asignatura|ramo|curso)/); if (cN < 0) continue;
+    const cL = findCol(h, /^(nivel|semestre|sem\b)/), cC = findCol(h, /^(codigo|cod\b)/), cS = findCol(h, /(sct|credito)/);
+    return rows.slice(i + 1).map(r => ({
+      nombre: String(r[cN] ?? '').trim(),
+      nivel: cL >= 0 ? parseInt(String(r[cL]).replace(/\D+/g, ''), 10) : null,
+      codigo: cC >= 0 ? String(r[cC] ?? '').trim() || null : null,
+      sct: cS >= 0 ? toNum(r[cS]) : null
+    })).filter(x => x.nombre);
+  }
+  return [];
+}
+function rowsToElec(rows) {
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
+    const h = rows[i].map(String);
+    const cN = findCol(h, /^(nombre|asignatura|ramo|curso|electivo)/); if (cN < 0) continue;
+    return rows.slice(i + 1).map(r => ({ nombre: String(r[cN] ?? '').trim() })).filter(x => x.nombre);
+  }
+  return rows.map(r => ({ nombre: String(r.find(x => String(x).trim() && !isFinite(Number(x))) ?? '').trim() })).filter(x => x.nombre);
+}
+function linesToElec(text) { return String(text).split(/\r?\n/).map(s => s.replace(/^[\s\-•*\d.)]+/, '').trim()).filter(Boolean).map(nombre => ({ nombre })); }
+function diffMalla(items) {
+  const old = (Array.isArray(state.meta.malla) ? state.meta.malla : baseMalla()).map(o => Object.assign({}, o));
+  const used = new Set(), rows = [];
+  const clean = items.map(x => ({
+    lv: parseInt(x?.nivel ?? x?.lv, 10), code: x?.codigo != null ? String(x.codigo).trim() : '',
+    name: String(x?.nombre ?? x?.name ?? '').replace(/\s+/g, ' ').trim(),
+    sct: x?.sct == null || x.sct === '' ? null : Number(x.sct)
+  })).filter(x => x.name);
+  for (const it of clean) {
+    const m = (it.code && old.find(o => o.code === it.code && !used.has(o.id))) || old.find(o => simple(o.name) === simple(it.name) && !used.has(o.id)) || null;
+    if (m) used.add(m.id);
+    const lv = Number.isFinite(it.lv) && it.lv > 0 ? it.lv : (m ? Number(m.lv) : 1);
+    const sct = Number.isFinite(it.sct) ? it.sct : (m ? Number(m.sct) || 0 : 0);
+    const code = it.code || (m ? m.code : '');
+    const changes = [];
+    if (m) {
+      if (m.name !== it.name) changes.push(['Nombre', m.name, it.name]);
+      if ((Number(m.sct) || 0) !== sct) changes.push(['SCT', m.sct, sct]);
+      if (Number(m.lv) !== lv) changes.push(['Nivel', m.lv, lv]);
+      if (it.code && m.code !== it.code) changes.push(['Código', m.code, it.code]);
+    }
+    rows.push({ id: m ? m.id : uid(), oldCode: m ? m.code : null, lv, code, name: it.name, sct, sctMissing: !Number.isFinite(it.sct) && !m, kind: m ? (changes.length ? 'cambio' : 'igual') : 'nuevo', changes });
+  }
+  return { rows, missing: old.filter(o => !used.has(o.id)) };
+}
+function mallaReviewHTML(imp) {
+  const res = imp.result;
+  const ch = res.rows.filter(r => r.kind === 'cambio'), nu = res.rows.filter(r => r.kind === 'nuevo'), same = res.rows.filter(r => r.kind === 'igual');
+  const line = (r, extra = '') => `<div class="imp-row ${extra}"><span class="lvl-chip num">N${r.lv}</span><span class="imp-n">${esc(r.name)}${r.sctMissing ? '<em class="tag">SCT por confirmar</em>' : ''}${r.changes?.length ? `<small>${r.changes.map(([k, a, b]) => `${k}: ${esc(a)} → ${esc(b)}`).join(' · ')}</small>` : ''}</span><span class="imp-s num">${esc(r.sct)} SCT</span></div>`;
+  const none = !ch.length && !nu.length && !res.missing.length;
+  return `<div class="imp-review">
+    <div class="imp-sum"><span class="pill gris">${res.rows.length} ramos leídos</span>${ch.length ? `<span class="pill ambar">${ch.length} ${ch.length === 1 ? 'cambio' : 'cambios'}</span>` : ''}${nu.length ? `<span class="pill azul">${nu.length} ${nu.length === 1 ? 'nuevo' : 'nuevos'}</span>` : ''}${res.missing.length ? `<span class="pill rojo">${res.missing.length} no aparecen</span>` : ''}${none ? '<span class="pill azul">Tu malla ya está al día</span>' : ''}</div>
+    ${ch.length ? `<div class="imp-sec">Cambian</div>${ch.map(r => line(r)).join('')}` : ''}
+    ${nu.length ? `<div class="imp-sec">Nuevos</div>${nu.map(r => line(r)).join('')}` : ''}
+    ${res.missing.length ? `<div class="imp-sec">No aparecen en lo que subiste</div>${res.missing.map(m => line({ lv: m.lv, name: m.name, sct: m.sct }, imp.removeMissing ? 'miss' : '')).join('')}
+      <label class="rowf imp-check"><span class="lbl">Quitarlos de la malla<small>Tus cursos con esos ramos no se borran</small></span><input id="imp-remove" type="checkbox" class="switch" ${imp.removeMissing ? 'checked' : ''}></label>` : ''}
+    ${same.length ? `<details class="imp-more"><summary>${same.length} ${same.length === 1 ? 'ramo' : 'ramos'} sin cambios</summary>${same.map(r => line(r)).join('')}</details>` : ''}
+    <div class="imp-actions">${none ? '' : '<button class="btn primary" data-act="imp-apply">Aplicar cambios</button>'}<button class="btn" data-act="imp-cancel">${none ? 'Cerrar' : 'Descartar'}</button></div>
+  </div>`;
+}
+function applyMalla() {
+  const { rows, missing } = state.imp.result;
+  const codes = new Set(), out = [];
+  for (const r of rows) {
+    let code = r.code;
+    if (!code || codes.has(code)) code = 'NUEVO-' + uid().slice(0, 4).toUpperCase();
+    codes.add(code);
+    if (r.oldCode && r.oldCode !== code) {
+      state.courses.forEach(c => { if (c.code === r.oldCode) c.code = code; });
+      const e = state.meta.electivos;
+      if (e && r.oldCode in e) { const n = Object.assign({}, e); n[code] = n[r.oldCode]; delete n[r.oldCode]; state.meta.electivos = n; }
+    }
+    out.push({ id: r.id, lv: r.lv, code, name: r.name, sct: r.sct });
+  }
+  if (!state.imp.removeMissing) missing.forEach(m => { if (!codes.has(m.code)) out.push(Object.assign({}, m)); });
+  state.meta.malla = out;
+  rebuildRamos();
+  state.courses.forEach(c => c.code && syncCourses(c.code));
+  state.imp = { tab: 'malla', status: 'ok', msg: `Malla actualizada: ${out.length} ramos, ${out.reduce((s, r) => s + (Number(r.sct) || 0), 0)} SCT en total.` };
+  render(); scheduleSave();
+}
+function diffElec(items) {
+  const slots = RAMOS.filter(r => r.isElec).sort((a, b) => a.lv - b.lv || String(a.code).localeCompare(String(b.code)));
+  const el = state.meta.electivos || {};
+  const names = [...new Set(items.map(x => String(x?.nombre ?? x?.name ?? (typeof x === 'string' ? x : '')).replace(/\s+/g, ' ').trim())
+    .filter(n => n && !/^electivo( de)? especialidad/i.test(n)))];
+  const pairs = slots.map(s => ({ code: s.code, base: s.base, lv: s.lv, sct: s.sct, prev: String(el[s.code] || '').trim(), next: null }));
+  const pending = [];
+  for (const n of names) {
+    const p = pairs.find(x => simple(x.prev) === simple(n));
+    if (p) p.next = p.prev; else pending.push(n);
+  }
+  for (const p of pairs) if (p.next == null && !p.prev && pending.length) p.next = pending.shift();
+  pairs.forEach(p => { if (p.next == null) p.next = p.prev; });
+  return { pairs, extra: pending };
+}
+function elecReviewHTML(imp) {
+  const { pairs, extra } = imp.result;
+  const ch = pairs.filter(p => p.next !== p.prev);
+  return `<div class="imp-review">
+    <div class="imp-sum">${ch.length ? `<span class="pill azul">${ch.length} ${ch.length === 1 ? 'electivo nuevo' : 'electivos nuevos'}</span>` : '<span class="pill azul">No hay electivos nuevos</span>'}${extra.length ? `<span class="pill ambar">${extra.length} no caben</span>` : ''}</div>
+    ${ch.map(p => `<div class="imp-row"><span class="lvl-chip num">N${p.lv}</span><span class="imp-n">${esc(p.next)}<small>${esc(p.base)}${p.prev ? ` · antes ${esc(p.prev)}` : ''}</small></span><span class="imp-s num">${esc(p.sct)} SCT</span></div>`).join('')}
+    ${extra.length ? `<div class="imp-sec">No caben, ya tienes todos los electivos con nombre</div>${extra.map(n => `<div class="imp-row"><span class="lvl-chip">—</span><span class="imp-n">${esc(n)}</span><span></span></div>`).join('')}` : ''}
+    <div class="imp-actions">${ch.length ? '<button class="btn primary" data-act="imp-apply">Aplicar cambios</button>' : ''}<button class="btn" data-act="imp-cancel">${ch.length ? 'Descartar' : 'Cerrar'}</button></div>
+  </div>`;
+}
+function applyElec() {
+  const ch = state.imp.result.pairs.filter(p => p.next !== p.prev);
+  const e = Object.assign({}, state.meta.electivos);
+  ch.forEach(p => { e[p.code] = p.next; });
+  state.meta.electivos = e;
+  rebuildRamos(); ch.forEach(p => syncCourses(p.code));
+  state.imp = { tab: 'electivos', status: 'ok', msg: `Listo: ${ch.length} ${ch.length === 1 ? 'electivo actualizado' : 'electivos actualizados'}.` };
+  render(); scheduleSave();
+}
+/* ---------- temas: color de acento y fondo, como los temas del escritorio ---------- */
+const THEMES = [
+  { id: 'clasico', name: 'Clásico',
+    l: { a: '#0A63E8', s: '#E5EDFD', o: '#FFFFFF', w: 'none' },
+    d: { a: '#5B9BFF', s: 'rgba(91,155,255,.16)', o: '#06142E', w: 'none' } },
+  { id: 'bloom', name: 'Bloom',
+    l: { a: '#3D5AFE', s: '#E7EBFF', o: '#FFFFFF', w: 'radial-gradient(1100px 620px at 88% -8%, rgba(92,120,255,.38), transparent 62%), radial-gradient(900px 560px at -6% 4%, rgba(176,120,255,.30), transparent 60%), radial-gradient(900px 640px at 50% 112%, rgba(90,180,255,.22), transparent 62%)' },
+    d: { a: '#8E9DFF', s: 'rgba(142,157,255,.18)', o: '#0A0F33', w: 'radial-gradient(1100px 620px at 88% -8%, rgba(70,90,255,.34), transparent 62%), radial-gradient(900px 560px at -6% 4%, rgba(140,80,255,.26), transparent 60%), radial-gradient(900px 640px at 50% 112%, rgba(40,120,255,.18), transparent 62%)' } },
+  { id: 'amanecer', name: 'Amanecer',
+    l: { a: '#C2410C', s: '#FDEBDF', o: '#FFFFFF', w: 'radial-gradient(1000px 600px at 90% -10%, rgba(255,160,80,.42), transparent 60%), radial-gradient(900px 600px at 0% 8%, rgba(255,95,140,.26), transparent 60%), radial-gradient(900px 600px at 40% 115%, rgba(255,200,90,.24), transparent 62%)' },
+    d: { a: '#FF8A4C', s: 'rgba(255,138,76,.16)', o: '#2B1200', w: 'radial-gradient(1000px 600px at 90% -10%, rgba(255,120,50,.28), transparent 60%), radial-gradient(900px 600px at 0% 8%, rgba(220,60,120,.22), transparent 60%)' } },
+  { id: 'bosque', name: 'Bosque',
+    l: { a: '#1E7F4E', s: '#E1F2E8', o: '#FFFFFF', w: 'radial-gradient(1000px 600px at 85% -10%, rgba(60,180,110,.32), transparent 60%), radial-gradient(900px 560px at 0% 20%, rgba(150,200,80,.24), transparent 60%)' },
+    d: { a: '#4CD07D', s: 'rgba(76,208,125,.15)', o: '#04210F', w: 'radial-gradient(1000px 600px at 85% -10%, rgba(30,150,90,.28), transparent 60%), radial-gradient(900px 560px at 0% 20%, rgba(100,160,40,.18), transparent 60%)' } },
+  { id: 'oceano', name: 'Océano',
+    l: { a: '#0B7489', s: '#DDF0F3', o: '#FFFFFF', w: 'radial-gradient(1000px 600px at 90% -10%, rgba(30,180,200,.34), transparent 60%), radial-gradient(900px 600px at 0% 0%, rgba(40,110,220,.24), transparent 60%)' },
+    d: { a: '#3CC8D6', s: 'rgba(60,200,214,.15)', o: '#02262B', w: 'radial-gradient(1000px 600px at 90% -10%, rgba(20,150,170,.30), transparent 60%), radial-gradient(900px 600px at 0% 0%, rgba(30,80,200,.22), transparent 60%)' } },
+  { id: 'lavanda', name: 'Lavanda',
+    l: { a: '#6D45D6', s: '#EEE8FC', o: '#FFFFFF', w: 'radial-gradient(1000px 620px at 88% -10%, rgba(160,120,255,.34), transparent 60%), radial-gradient(900px 600px at 0% 10%, rgba(255,140,220,.20), transparent 60%)' },
+    d: { a: '#B49BFF', s: 'rgba(180,155,255,.17)', o: '#1A0E3A', w: 'radial-gradient(1000px 620px at 88% -10%, rgba(120,80,240,.30), transparent 60%), radial-gradient(900px 600px at 0% 10%, rgba(200,80,180,.18), transparent 60%)' } },
+  { id: 'rosa', name: 'Rosa',
+    l: { a: '#C2255C', s: '#FBE5EE', o: '#FFFFFF', w: 'radial-gradient(1000px 600px at 90% -10%, rgba(255,120,170,.34), transparent 60%), radial-gradient(900px 600px at 0% 10%, rgba(255,180,140,.22), transparent 60%)' },
+    d: { a: '#FF7AA8', s: 'rgba(255,122,168,.16)', o: '#330818', w: 'radial-gradient(1000px 600px at 90% -10%, rgba(220,60,120,.28), transparent 60%), radial-gradient(900px 600px at 0% 10%, rgba(200,100,80,.16), transparent 60%)' } },
+  { id: 'grafito', name: 'Grafito',
+    l: { a: '#2F3542', s: '#E6E8EE', o: '#FFFFFF', w: 'none' },
+    d: { a: '#D4D8E0', s: 'rgba(212,216,224,.14)', o: '#14161B', w: 'none' } }
+];
+function isDarkNow() {
+  const m = state.meta.look?.mode || 'auto';
+  if (m !== 'auto') return m === 'dark';
+  const dt = document.documentElement.dataset.theme;
+  if (dt === 'dark' || dt === 'light') return dt === 'dark';
+  return matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function applyTheme() {
+  const look = state.meta.look || {};
+  const t = THEMES.find(x => x.id === look.theme) || THEMES[0];
+  const st = document.documentElement.style;
+  [['l', t.l], ['d', t.d]].forEach(([k, v]) => {
+    st.setProperty(`--t-accent-${k}`, v.a); st.setProperty(`--t-accent-soft-${k}`, v.s);
+    st.setProperty(`--t-on-accent-${k}`, v.o); st.setProperty(`--t-wall-${k}`, v.w);
+  });
+  const cl = document.documentElement.classList;
+  cl.toggle('m-light', look.mode === 'light'); cl.toggle('m-dark', look.mode === 'dark');
+}
+function temasHTML() {
+  const look = state.meta.look || {};
+  const mode = look.mode || 'auto', cur = look.theme || 'clasico', dark = isDarkNow();
+  return `<p class="note">Elige los colores de la app. El tema cambia el color de los botones y el fondo; las notas siguen en azul y rojo. Se guarda en tu cuenta.</p>
+    <div class="sec"><span>Modo</span></div>
+    <div class="seg mode-seg" role="radiogroup" aria-label="Modo de color">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<button role="radio" aria-checked="${mode === v}" data-act="set-mode" data-mode="${v}">${l}</button>`).join('')}</div>
+    <div class="sec"><span>Tema</span></div>
+    <div class="themes">${THEMES.map(t => {
+      const v = dark ? t.d : t.l;
+      return `<button class="theme-card" data-act="set-theme" data-theme="${t.id}" aria-pressed="${cur === t.id}" style="--p-bg:${dark ? '#0B0D12' : '#F2F3F7'};--p-wall:${v.w};--p-card:${dark ? '#232733' : '#FFFFFF'};--p-accent:${v.a}">
+        <span class="tc-prev" aria-hidden="true"><b></b><i></i><i></i></span>
+        <span class="tc-name">${t.name}${cur === t.id ? '<span class="ok" aria-hidden="true">✓</span>' : ''}</span>
+      </button>`;
+    }).join('')}</div>`;
+}
+/* ---------- respaldo: copia en archivo y guardado automático en un archivo (versión .html) ---------- */
+const STANDALONE = !window.claude;
+const bk = { handle: null, perm: null, last: null, newer: null, pending: null, msg: '', t: null };
+const canAutoFile = () => STANDALONE && !API && typeof window.showSaveFilePicker === 'function';
+function exportData() { return JSON.stringify({ app: 'registro-de-notas', v: 1, savedAt: state.meta.savedAt || Date.now(), courses: state.courses, meta: state.meta }, null, 2); }
+function openKV() { return new Promise((res, rej) => { const r = indexedDB.open('registro-de-notas', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function kvGet(k) { try { const d = await openKV(); return await new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); } catch (_) { return null; } }
+async function kvSet(k, v) { try { const d = await openKV(); await new Promise((res, rej) => { const t = d.transaction('kv', 'readwrite'); if (v == null) t.objectStore('kv').delete(k); else t.objectStore('kv').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); } catch (_) {} }
+const rerenderBk = () => { if (state.view === 'settings' && state.tab === 'respaldo') render(); };
+const hhmm = t => new Date(t).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+function parseBackup(text) {
+  try { const d = JSON.parse(text); return d && Array.isArray(d.courses) ? d : null; } catch (_) { return null; }
+}
+async function bkReadFile() {
+  try { const f = await bk.handle.getFile(); const t = await f.text(); return t.trim() ? parseBackup(t) : null; } catch (_) { return null; }
+}
+async function bkCheckNewer() {
+  const d = await bkReadFile();
+  if (d && (d.savedAt || 0) > (state.meta.savedAt || 0) + 1000) bk.newer = d;
+}
+async function bkWrite() {
+  if (!bk.handle || bk.perm !== 'granted' || bk.newer) return;
+  try {
+    const w = await bk.handle.createWritable(); await w.write(exportData()); await w.close();
+    bk.last = Date.now(); bk.msg = ''; setSave('ok', `Respaldo en ${bk.handle.name}`);
+  } catch (_) { bk.perm = 'prompt'; bk.msg = 'Se perdió el permiso para guardar en el archivo. Toca «Reanudar» para seguir.'; setSave('err', 'Respaldo en archivo pausado'); }
+  rerenderBk();
+}
+function bkSchedule() { if (bk.handle && bk.perm === 'granted') { clearTimeout(bk.t); bk.t = setTimeout(bkWrite, 1200); } }
+async function bkInit() {
+  if (!canAutoFile()) return;
+  const h = await kvGet('archivo'); if (!h) return;
+  bk.handle = h;
+  try { bk.perm = await h.queryPermission({ mode: 'readwrite' }); } catch (_) { bk.perm = 'prompt'; }
+  if (bk.perm === 'granted') { await bkCheckNewer(); if (!bk.newer) setSave('ok', `Respaldo en ${h.name}`); }
+  else setSave('busy', 'Toca Configuración → Respaldo para reanudar');
+  rerenderBk();
+}
+async function bkPick() {
+  try {
+    const h = await window.showSaveFilePicker({ suggestedName: 'registro-de-notas.json', types: [{ description: 'Respaldo de Registro de Notas', accept: { 'application/json': ['.json'] } }] });
+    bk.handle = h; bk.perm = 'granted'; bk.msg = ''; await kvSet('archivo', h);
+    const had = await bkReadFile();
+    if (had && had.courses.length && (had.savedAt || 0) > (state.meta.savedAt || 0) + 1000) bk.newer = had; else await bkWrite();
+  } catch (e) { if (e?.name !== 'AbortError') bk.msg = 'No se pudo usar ese archivo. Prueba con otro nombre o carpeta.'; }
+  rerenderBk();
+}
+async function bkResume() {
+  try { bk.perm = await bk.handle.requestPermission({ mode: 'readwrite' }); } catch (_) { bk.perm = 'denied'; }
+  if (bk.perm === 'granted') { await bkCheckNewer(); if (!bk.newer) await bkWrite(); }
+  else bk.msg = 'Sin permiso no puedo guardar en el archivo. Vuelve a tocar «Reanudar» y elige Permitir.';
+  rerenderBk();
+}
+function useBackup(d) {
+  state.courses = d.courses.map(normalize); state.meta = Object.assign({}, d.meta || {}, { savedAt: d.savedAt || Date.now() });
+  state.sel = null; state.pane = 'list';
+}
+async function bkExport() {
+  const name = `registro-de-notas-${new Date().toISOString().slice(0, 10)}.json`;
+  const data = exportData();
+  if (!STANDALONE) {
+    let dl = null; try { dl = await window.claude.use('downloads'); } catch (_) {}
+    if (!dl) { toast('Descargar no está disponible aquí.'); return; }
+    try { await dl.save({ filename: name, data }); toast('Copia descargada.'); }
+    catch (e) { if (e?.code !== 'declined') toast('No se pudo descargar la copia.'); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = name;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  toast('Copia descargada.');
+}
+function respaldoHTML() {
+  const p = bk.pending;
+  const review = p ? `<div class="imp-review">
+      <div class="imp-status">Copia del ${esc(hhmm(p.savedAt || Date.now()))}: ${p.courses.length} cursos${Array.isArray(p.meta?.log) ? ` y ${p.meta.log.length} registros` : ''}. Va a reemplazar todo lo que tienes aquí.</div>
+      <div class="imp-actions"><button class="btn primary" data-act="bk-apply">Reemplazar mis datos</button><button class="btn" data-act="bk-cancel">Cancelar</button></div>
+    </div>` : '';
+  const copyCard = `<div class="card imp">
+    <div><div class="imp-title">Copia de tus datos</div><div class="cap">Descarga un archivo con todos tus cursos, notas, malla, temas y registro, o carga una copia que descargaste antes.</div></div>
+    <div class="imp-actions"><button class="btn primary small" data-act="bk-export">Descargar copia (.json)</button><button class="btn tinted small" data-act="bk-import">Cargar copia</button><input type="file" id="bk-file" accept=".json,application/json" hidden></div>
+    ${review}
+  </div>`;
+  if (API) return `<p class="note">Tus datos viven en Google Drive y se guardan solos. También puedes descargar una copia o cargar una que tengas, por ejemplo la que bajaste desde la versión de Claude.</p>${profileHTML()}${copyCard}`;
+  if (!STANDALONE) return `<p class="note">Para usar la app fuera de Claude, descarga aquí tu copia y luego, en la versión en archivo (.html), ve a Configuración → Respaldo → Cargar copia.</p>${copyCard}`;
+  let auto;
+  if (!canAutoFile()) auto = `<div class="imp-status err">Este navegador no permite guardar automáticamente en un archivo. Abre la app con Chrome o Edge en el computador.</div>`;
+  else if (!bk.handle) auto = `<ol class="steps"><li>Instala <b>Google Drive para escritorio</b> si aún no lo tienes; crea una carpeta de Drive en tu computador.</li><li>Toca <b>Elegir archivo de respaldo</b> y guarda <b>registro-de-notas.json</b> dentro de esa carpeta de Google Drive.</li><li>Listo: cada cambio se guarda en ese archivo y Drive lo sube solo a tu cuenta.</li></ol>
+      <div class="imp-actions"><button class="btn primary small" data-act="bk-pick">Elegir archivo de respaldo</button></div>`;
+  else if (bk.newer) auto = `<div class="imp-status">El archivo <b>${esc(bk.handle.name)}</b> tiene una versión más nueva (${esc(hhmm(bk.newer.savedAt))}), quizás guardada desde otro computador.</div>
+      <div class="imp-actions"><button class="btn primary small" data-act="bk-use-newer">Usar la del archivo</button><button class="btn small" data-act="bk-keep">Mantener la de aquí</button></div>`;
+  else if (bk.perm !== 'granted') auto = `<div class="imp-status">Por seguridad, el navegador pide permiso cada vez que abres la app para seguir guardando en <b>${esc(bk.handle.name)}</b>.</div>
+      <div class="imp-actions"><button class="btn primary small" data-act="bk-resume">Reanudar respaldo automático</button><button class="btn small" data-act="bk-stop">Dejar de usar este archivo</button></div>`;
+  else auto = `<div class="imp-status ok">Guardando automáticamente en ${esc(bk.handle.name)}${bk.last ? ` · último guardado ${esc(hhmm(bk.last))}` : ''}</div>
+      <div class="imp-actions"><button class="btn small" data-act="bk-pick">Cambiar archivo</button><button class="btn small" data-act="bk-stop">Dejar de guardar</button></div>`;
+  return `<p class="note">Tus notas se guardan en este navegador. Para tenerlas también en Google Drive, conecta un archivo de respaldo.</p>
+    <div class="card imp"><div><div class="imp-title">Guardar automáticamente en Google Drive</div><div class="cap">Funciona con Chrome o Edge en el computador.</div></div>${auto}${bk.msg ? `<div class="imp-status err">${esc(bk.msg)}</div>` : ''}</div>
+    ${copyCard}`;
+}
+function mencionCards(armable) {
+  const cur = state.meta.mencion;
+  return `<div class="mencion-pick">${Object.entries(MALLAS).map(([k, m]) => { const st = mallaStats(k); return `<button class="mencion-card" data-act="set-mencion" data-m="${k}" ${armable ? 'data-arm="1"' : ''} aria-pressed="${cur === k}"><span class="mc-t">${m.label}</span><span class="mc-s">${st.n} ramos · ${st.sct} SCT</span></button>`; }).join('')}</div>`;
+}
+/* ---------- modo en línea: perfiles con apodo y PIN guardados en Google Drive (puente de Apps Script) ---------- */
+const API_SET = typeof window.REGISTRO_API === 'string';
+const API = API_SET && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec\/?$/.test(window.REGISTRO_API.trim()) ? window.REGISTRO_API.trim() : null;
+const SESSION_KEY = 'registro-sesion';
+const remote = { user: null, pin: null, version: 0, dirty: false, saving: false, again: false, t: null, poll: null };
+const lsKey = () => API && remote.user ? `registro-cache:${remote.user}` : LS_KEY;
+const LOGIN_ERR = {
+  apodo: 'El apodo debe tener entre 2 y 24 letras o números.',
+  pin: 'El PIN debe tener entre 4 y 6 números.',
+  auth: 'Apodo o PIN incorrectos.',
+  grupo: 'El código de grupo no es correcto. Pídeselo a quien te compartió la app.',
+  existe: 'Ese apodo ya existe. Elige otro, o entra con tu PIN si es tuyo.',
+  bloqueado: 'Demasiados intentos fallidos. Espera 15 minutos e intenta de nuevo.',
+  server: 'El servidor tuvo un problema. Intenta de nuevo en un momento.'
+};
+async function api(action, payload) {
+  // cuerpo en texto plano: así el navegador no hace la consulta previa (CORS) que Apps Script no responde
+  const res = await fetch(API, { method: 'POST', body: JSON.stringify(Object.assign({ action }, payload)) });
+  if (!res.ok) throw { code: 'red' };
+  return res.json();
+}
+function setupHTML() {
+  return `<section class="card empty"><h2>Falta conectar el puente</h2>
+    <p>Abre <b>index.html</b>, busca la línea <code>window.REGISTRO_API</code> al inicio del archivo y pega ahí la URL de tu puente de Google Apps Script (termina en <b>/exec</b>).</p></section>`;
+}
+function loginHTML() {
+  const L = state.login || (state.login = { mode: 'entrar' });
+  const crear = L.mode === 'crear';
+  return `<section class="card login">
+    <h2>${crear ? 'Crea tu perfil' : 'Entra a tu registro'}</h2>
+    <p>${crear ? 'Elige un apodo y un PIN. Con ellos entras desde cualquier dispositivo y tus notas te siguen.' : 'Escribe tu apodo y tu PIN para ver tus notas.'}</p>
+    <form id="login-form" class="group login-form" autocomplete="on" novalidate>
+      <label class="rowf stack"><span class="lbl">Apodo</span><input id="lg-user" class="field" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Ej.: blas" value="${esc(L.user || '')}"></label>
+      <label class="rowf stack"><span class="lbl">PIN (4 a 6 números)</span><input id="lg-pin" class="field" name="password" type="password" inputmode="numeric" maxlength="6" autocomplete="${crear ? 'new-password' : 'current-password'}"></label>
+      ${crear ? `<label class="rowf stack"><span class="lbl">Repite el PIN</span><input id="lg-pin2" class="field" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></label>
+      <label class="rowf stack"><span class="lbl">Código de grupo<small>Te lo da quien te compartió la app</small></span><input id="lg-group" class="field" autocapitalize="none" autocorrect="off" spellcheck="false"></label>` : ''}
+      <div class="rowf stack"><button class="btn primary" type="submit">${crear ? 'Crear perfil' : 'Entrar'}</button><div id="lg-msg" class="con-hint err" role="alert">${esc(L.msg || '')}</div></div>
+    </form>
+    <button class="btn plain" data-act="lg-mode">${crear ? '¿Ya tienes perfil? Entra' : '¿Primera vez? Crea tu perfil'}</button>
+    <p class="cap">No uses un PIN que ocupes en el banco u otras cuentas importantes.</p>
+  </section>`;
+}
+async function doLogin(form) {
+  const L = state.login || (state.login = { mode: 'entrar' });
+  const crear = L.mode === 'crear';
+  const user = document.getElementById('lg-user').value.trim();
+  const pin = document.getElementById('lg-pin').value.trim();
+  const msg = document.getElementById('lg-msg');
+  const btn = form.querySelector('button[type=submit]');
+  const say = t => { msg.textContent = t; };
+  L.user = user;
+  if (user.length < 2) return say(LOGIN_ERR.apodo);
+  if (!/^\d{4,6}$/.test(pin)) return say(LOGIN_ERR.pin);
+  let group = '';
+  if (crear) {
+    if (pin !== document.getElementById('lg-pin2').value.trim()) return say('Los PIN no coinciden.');
+    group = document.getElementById('lg-group').value.trim();
+    if (!group) return say('Escribe el código de grupo.');
+  }
+  btn.disabled = true; btn.textContent = crear ? 'Creando…' : 'Entrando…'; say('');
+  try {
+    const r = await api(crear ? 'register' : 'login', { user, pin, group });
+    if (!r.ok) { btn.disabled = false; btn.textContent = crear ? 'Crear perfil' : 'Entrar'; return say(LOGIN_ERR[r.error] || 'No se pudo entrar. Intenta de nuevo.'); }
+    remote.user = r.user; remote.pin = pin;
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify({ user: r.user, pin })); } catch (_) {}
+    state.login = null; state.sel = null; state.view = null; state.pane = 'list';
+    applyRemote(r);
+    setSave('ok', `Guardado en Drive · ${r.user}`);
+    startPoll();
+    if (crear) toast(`Perfil “${r.user}” creado.`);
+  } catch (_) {
+    btn.disabled = false; btn.textContent = crear ? 'Crear perfil' : 'Entrar';
+    say('No hay conexión con el servidor. Revisa tu internet e intenta de nuevo.');
+  }
+}
+function applyRemote(r) {
+  state.meta = (r.data && r.data.meta) || {}; rebuildRamos();
+  state.courses = ((r.data && r.data.courses) || []).map(normalize);
+  remote.version = r.version; remote.dirty = false;
+  saveLocal(); render();
+}
+function remoteSchedule() { clearTimeout(remote.t); setSave('busy', 'Guardando…'); remote.t = setTimeout(remoteSave, 1200); }
+async function remoteSave() {
+  remote.t = null;
+  if (!remote.user) return;
+  if (remote.saving) { remote.again = true; return; }
+  remote.saving = true;
+  try {
+    const r = await api('save', { user: remote.user, pin: remote.pin, base: remote.version, data: { courses: state.courses, meta: state.meta } });
+    if (r.ok) { remote.version = r.version; remote.dirty = remote.again; saveLocal(); setSave('ok', `Guardado en Drive · ${remote.user}`); }
+    else if (r.error === 'conflict') { applyRemote(r); setSave('ok', `Guardado en Drive · ${remote.user}`); toast('Había cambios desde otro dispositivo: cargué la versión más reciente. Revisa tu último cambio.'); }
+    else if (r.error === 'auth' || r.error === 'bloqueado') { logout('Tu PIN cambió o la sesión ya no es válida. Vuelve a entrar.'); }
+    else setSave('err', 'No se pudo guardar en Drive');
+  } catch (_) { setSave('err', 'Sin conexión: guardado en este dispositivo'); }
+  remote.saving = false;
+  if (remote.again) { remote.again = false; remoteSchedule(); }
+}
+async function remoteRefresh(force) {
+  if (!API || !remote.user || (document.hidden && !force)) return;
+  if (remote.dirty) { if (!remote.t && !remote.saving) remoteSave(); return; }
+  if (remote.saving || remote.t) return;
+  const ae = document.activeElement;
+  if (!force && ae && app.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return; // no interrumpir mientras escribes
+  try {
+    const r = await api('load', { user: remote.user, pin: remote.pin });
+    if (r.ok) { if (r.version > remote.version && !remote.dirty) { applyRemote(r); toast('Se cargaron cambios desde otro dispositivo.'); } setSave('ok', `Guardado en Drive · ${remote.user}`); }
+    else if (r.error === 'auth') logout('Tu PIN cambió. Vuelve a entrar.');
+  } catch (_) { setSave('err', 'Sin conexión: guardado en este dispositivo'); }
+}
+function startPoll() { clearInterval(remote.poll); remote.poll = setInterval(() => remoteRefresh(false), 30000); }
+function logout(msg) {
+  clearInterval(remote.poll); clearTimeout(remote.t);
+  try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+  Object.assign(remote, { user: null, pin: null, version: 0, dirty: false, saving: false, again: false, t: null, poll: null });
+  state.courses = []; state.meta = {}; state.view = null; state.sel = null;
+  state.login = { mode: 'entrar', msg: msg || '' };
+  setSave('', 'Sin sesión'); render();
+}
+async function remoteInit() {
+  let ses = null; try { ses = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (_) {}
+  if (!ses || !ses.user) { ready = true; setSave('', 'Sin sesión'); render(); return; }
+  remote.user = ses.user; remote.pin = ses.pin;
+  const cached = loadLocal();
+  if (cached) { state.meta = cached.meta; rebuildRamos(); state.courses = cached.courses.map(normalize); remote.version = cached.version || 0; remote.dirty = !!cached.dirty; }
+  ready = true; render(); setSave('busy', 'Conectando con Drive…');
+  try {
+    const r = await api('load', { user: remote.user, pin: remote.pin });
+    if (r.ok) {
+      if (remote.dirty && r.version === remote.version) remoteSave();          // cambios hechos sin conexión
+      else { if (remote.dirty) toast('Había cambios en otro dispositivo; se cargó la versión de Drive.'); applyRemote(r); setSave('ok', `Guardado en Drive · ${remote.user}`); }
+    } else if (r.error === 'auth' || r.error === 'bloqueado') return logout(LOGIN_ERR[r.error]);
+  } catch (_) { setSave('err', 'Sin conexión: usando la copia de este dispositivo'); }
+  startPoll();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) remoteRefresh(false); });
+window.addEventListener('online', () => remoteRefresh(true));
+function profileHTML() {
+  return `<div class="card imp"><div><div class="imp-title">Tu perfil: ${esc(remote.user)}</div><div class="cap">Tus notas se guardan en Google Drive. Entra con este apodo y tu PIN desde cualquier dispositivo y verás lo mismo.</div></div>
+    <div class="imp-actions"><button class="btn tinted small" data-act="rm-sync">Sincronizar ahora</button><button class="btn small" data-act="rm-logout">Cerrar sesión</button></div></div>`;
+}
+function emptyHTML() {
+  if (!MALLAS[state.meta.mencion]) return `<section class="card empty">
+    <h2>Bienvenido a Registro de Notas</h2>
+    <p>Para empezar, elige tu mención de Ingeniería Comercial. Así la app carga tu malla, con sus ramos y créditos.</p>
+    ${mencionCards(false)}
+    <p class="cap">Puedes cambiarla después en Configuración → Actualizar malla.</p>
+  </section>`;
+  return `<section class="card empty">
+    <div class="demo-scale"><span class="ink-rojo">3,2</span><span class="ink-rojo">3,9</span><span class="ink-azul">4,0</span><span class="ink-azul">5,5</span><span class="ink-azul">6,8</span></div>
+    <h2>Todavía no tienes cursos</h2>
+    <p>Crea un curso, define cuánto pesa cada evaluación y anota tus notas. La app calcula tu promedio, elimina las peores notas cuando corresponde y te dice cuánto necesitas en lo que queda para aprobar o eximirte.</p>
+    <div class="side-actions"><button class="btn primary" data-act="new-course">Crear curso</button><button class="btn" data-act="load-example">Ver con cursos de ejemplo</button></div>
+  </section>`;
+}
+function renderHeader() {
+  let s = 0, cr = 0, n = 0; const passed = new Set();
+  for (const c of state.courses) {
+    const A = analyze(c);
+    if (A.definitive && A.end && A.end.ok && c.code) passed.add(c.code);
+    if (A.show == null) continue;
+    if (A.definitive && !A.sufPending && !(A.end && A.end.ok)) continue; // reprobados no cuentan
+    const w = Number(c.credits) || 0; if (!w) continue;
+    s += A.show * w; cr += w; n++;
+  }
+  const mEl = document.getElementById('ov-mencion');
+  if (mEl) mEl.textContent = [MALLAS[state.meta.mencion] ? `Ingeniería Comercial · Mención ${MALLAS[state.meta.mencion].label}` : '', API && remote.user ? `Perfil: ${remote.user}` : ''].filter(Boolean).join(' · ');
+  const big = document.getElementById('ov-big');
+  const v = cr ? s / cr : null;
+  big.textContent = fmt(v, 2);
+  big.className = 'big ' + ink(v, 4);
+  document.getElementById('ov-sub').textContent = n ? `${n} ${n === 1 ? 'curso' : 'cursos'} · ${cr} créditos · sin contar reprobados` : 'Sin notas todavía';
+  const tot = RAMOS.reduce((a, r) => a + r.sct, 0);
+  const done = RAMOS.filter(r => passed.has(r.code));
+  const dsct = done.reduce((a, r) => a + r.sct, 0);
+  const share = RAMOS.length ? done.length / RAMOS.length : 0;
+  document.getElementById('ov-bar').style.transform = `scaleX(${Math.min(1, share)})`;
+  document.getElementById('ov-pct').textContent = `${Math.round(share * 100)}%`;
+  document.getElementById('ov-prog').innerHTML = `<b>${done.length}</b> de ${RAMOS.length} ramos aprobados · ${dsct} de ${tot} SCT`;
+}
+const SORTS = [['alfa', 'Nombre (A a Z)'], ['creditos', 'Créditos SCT'], ['nivel', 'Nivel de la malla']];
+let sortMode = 'alfa';
+try { const v = localStorage.getItem('libreta-orden'); if (SORTS.some(s => s[0] === v)) sortMode = v; } catch (_) {}
+function sortCourses(list) {
+  const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'es', { sensitivity: 'base' });
+  const lvOf = c => typeof c.level === 'number' ? c.level : 99;
+  const cmp = sortMode === 'creditos' ? (a, b) => ((Number(b.credits) || 0) - (Number(a.credits) || 0)) || byName(a, b)
+    : sortMode === 'nivel' ? (a, b) => (lvOf(a) - lvOf(b)) || byName(a, b)
+    : byName;
+  return [...list].sort(cmp);
+}
+function renderSide() {
+  const side = document.getElementById('side'); if (!side) return;
+  const groups = {};
+  const failedIds = new Set(state.courses.filter(isFailed).map(c => c.id));
+  state.courses.forEach(c => {
+    if (failedIds.has(c.id) && !showFailed) return;
+    const k = (c.semester || 'Sin semestre').trim() || 'Sin semestre'; (groups[k] ||= []).push(c);
+  });
+  const now = currentSem();
+  const keys = Object.keys(groups).sort().reverse();
+  const future = keys.filter(k => k > now).reverse();
+  const past = keys.filter(k => k < now);
+  const rowsOf = list => {
+    let s = 0, cr = 0;
+    const html = sortCourses(list).map(c => {
+      const A = analyze(c), st = statusOf(c, A);
+      const w = Number(c.credits) || 0;
+      if (A.show != null && w && !failedIds.has(c.id)) { s += A.show * w; cr += w; }
+      return `<button class="row ${c.id === state.sel ? 'active' : ''}" data-act="select" data-id="${c.id}">
+        <span class="n">${esc(c.name || 'Nuevo curso')}${c.example ? '<em class="tag">ejemplo</em>' : ''}</span>
+        <span class="m"><i class="dot ${st.tone}"></i>${esc(c.credits ?? 0)} cr. · ${st.text}</span>
+        <span class="g ${A.partial ? 'part' : ''} ${ink(A.show, c.pass)}" title="${A.partial ? 'Promedio a la fecha' : 'Nota final'}">${fmt(A.show)}</span>
+      </button>`;
+    }).join('');
+    return { html, avg: cr ? s / cr : null, cr };
+  };
+  const groupHTML = k => {
+    const list = groups[k], { html, avg, cr } = rowsOf(list);
+    const open = openSems.has(k), active = list.some(c => c.id === state.sel), n = list.length;
+    return `<div class="sem ${open ? 'open' : ''}">
+      <button class="sem-head" data-act="toggle-sem" data-sem="${esc(k)}" aria-expanded="${open}">
+        ${ICON.chev}
+        <span><span class="sem-name">${esc(k)}${active && !open ? '<i class="here" title="Aquí está el curso abierto"></i>' : ''}</span><span class="sem-sub">${n} ${n === 1 ? 'curso' : 'cursos'}${cr ? ' · ' + cr + ' cr.' : ''}</span></span>
+        <span class="sem-avg ${ink(avg, 4)}" title="Promedio ponderado del semestre">${fmt(avg, 2)}</span>
+      </button>
+      ${open ? `<div class="sem-list ${justOpened === k ? 'just-opened' : ''}">${html}</div>` : ''}
+    </div>`;
+  };
+  // semestre actual: siempre abierto y destacado
+  const curList = groups[now] || [];
+  const cur0 = rowsOf(curList);
+  let html = `<div class="sem current">
+    <div class="cur-head">
+      <span><span class="cur-lbl">Semestre actual</span><span class="cur-name">${esc(now)}</span><span class="sem-sub">${curList.length ? `${curList.filter(isFinished).length} de ${curList.length} ${curList.length === 1 ? 'ramo terminado' : 'ramos terminados'}${cur0.cr ? ' · ' + cur0.cr + ' cr.' : ''}` : 'Sin cursos todavía'}</span></span>
+      <span class="sem-avg big-avg ${ink(cur0.avg, 4)}" title="Promedio ponderado del semestre">${fmt(cur0.avg, 2)}</span>
+    </div>
+    ${curList.length ? `<label class="sort-row" for="sort-sel"><span>Ordenar por</span><select id="sort-sel" class="field">${SORTS.map(([v, l]) => `<option value="${v}" ${sortMode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label><div class="sem-list">${cur0.html}</div>` : `<div class="cur-empty">Agrega los ramos que estás rindiendo este semestre.</div>`}
+  </div>`;
+  if (future.length) html += `<div class="sec"><span>Próximos semestres</span></div>${future.map(groupHTML).join('')}`;
+  const nf = failedIds.size;
+  const hasEx = state.courses.some(c => c.example);
+  const links = (hasEx ? '<button class="btn plain small" data-act="clear-examples">Quitar ejemplos</button>' : '')
+    + (nf ? `<button class="btn plain small" data-act="toggle-failed">${showFailed ? 'Ocultar reprobados' : `Ver reprobados (${nf})`}</button>` : '');
+  html += `<div class="side-actions"><button class="btn primary" data-act="new-course">Nuevo curso</button></div>`;
+  if (past.length) {
+    html += `<button class="past-toggle" data-act="toggle-past" aria-expanded="${showPast}">${ICON.chev}<span>Semestres anteriores</span><span class="past-n">${past.length}</span></button>`;
+    if (showPast) {
+      const anyOpen = past.some(k => openSems.has(k));
+      html += `<div class="past ${justOpened === '__past' ? 'just-opened' : ''}">${anyOpen ? '<div class="sec"><span></span><button class="btn plain small" data-act="close-all-sems">Cerrar todos</button></div>' : ''}${past.map(groupHTML).join('')}</div>`;
+    }
+  }
+  if (links) html += `<div class="side-links">${links}</div>`;
+  justOpened = null;
+  side.innerHTML = html;
+}
+function renderMain() {
+  const main = document.getElementById('main'); if (!main) return;
+  const c = cur(); if (!c) { main.innerHTML = ''; return; }
+  const ex = c.exam, rule = pepRule(c);
+  const semCtl = `<span class="val num">${esc(c.semester)}</span>`;
+  const exHint = `Nota final = presentación × ${fmt(100 - (Number(ex.weight) || 0), 0)}% + examen × ${fmt(Number(ex.weight) || 0, 0)}%. Si fijas una nota de eximición y tu presentación la alcanza, la presentación pasa a ser tu nota final.`;
+  main.innerHTML = `<section class="detail ${animatePane ? 'pane-in' : ''}">
+    ${courseHeadHTML(c)}
+    <div id="result" class="card hero"></div>
+    <div id="pepbox"></div>
+    <div id="sufbox"></div>
+    <div class="sec"><span>${ex.enabled ? 'Nota de presentación' : 'Evaluaciones'}</span><span id="wsum" class="wsum"></span></div>
+    <div class="comps">${c.components.map(compHTML).join('')}</div>
+    <button class="btn tinted" data-act="add-comp">Agregar evaluación</button>
+    <div class="sec"><span>Examen</span></div>
+    <div class="group exam">
+      <label class="rowf"><span class="lbl">El curso tiene examen</span><input id="ex-on" type="checkbox" class="switch" data-k="exam-on" ${ex.enabled ? 'checked' : ''}></label>
+      ${ex.enabled ? `
+      <label class="rowf"><span class="lbl">Peso en la nota final</span><span class="ctl"><input id="ex-w" class="field num-in" data-k="exam-weight" inputmode="decimal" value="${esc(ex.weight)}"><span class="unit">%</span></span></label>
+      <label class="rowf"><span class="lbl">Eximición desde<small>Déjalo vacío si el curso no exime</small></span><span class="ctl"><input id="ex-ex" class="field num-in" data-k="exam-exempt" inputmode="decimal" placeholder="—" value="${gtxt(ex.exempt)}"></span></label>
+      <label class="rowf"><span class="lbl">Nota del examen</span><span class="ctl"><input id="ex-v" class="field num-in ${ink(ex.value, c.pass)}" data-k="exam-value" inputmode="decimal" placeholder="—" value="${gtxt(ex.value)}"></span></label>
+      <div class="rowf note hint">${exHint}</div>` : `<div class="rowf note hint">Actívalo si el curso tiene examen final, con su peso y la nota para eximirse.</div>`}
+    </div>
+    <div class="sec"><span>Datos del curso</span></div>
+    <div class="group">
+      <label class="rowf"><span class="lbl">Semestre</span><span class="ctl">${semCtl}</span></label>
+      <label class="rowf"><span class="lbl">Créditos SCT</span><span class="ctl"><input id="c-cred" class="field num-in" data-k="credits" inputmode="numeric" value="${esc(c.credits)}"></span></label>
+      <label class="rowf"><span class="lbl">Nota para aprobar</span><span class="ctl"><input id="c-pass" class="field num-in" data-k="pass" inputmode="decimal" value="${gtxt(c.pass)}"></span></label>
+      <label class="rowf"><span class="lbl">Redondear a 1 decimal</span><input id="c-round" type="checkbox" class="switch" data-k="round" ${c.round ? 'checked' : ''}></label>
+      <label class="rowf"><span class="lbl">Exigir una PEP con nota mínima<small>Si ninguna PEP llega, vas a examen de suficiencia</small></span><input id="c-pep" type="checkbox" class="switch" data-k="pep-on" ${rule.enabled ? 'checked' : ''}></label>
+      <label class="rowf"><span class="lbl">Examen de suficiencia<small>Si el promedio queda entre 2,95 y 3,94, o no cumples un requisito</small></span><input id="c-suf" type="checkbox" class="switch" data-k="suf-rule" ${c.sufRule !== false ? 'checked' : ''}></label>
+      <label class="rowf"><span class="lbl">Nota mínima en esa PEP</span><span class="ctl"><input id="c-pepmin" class="field num-in" data-k="pep-min" inputmode="decimal" value="${gtxt(rule.min)}" ${rule.enabled ? '' : 'disabled'}></span></label>
+    </div>
+    <p class="foot-hint">Escribe las notas como 5,5 · 5.5 · o 55.</p>
+  </section>`;
+  animatePane = false;
+  refresh();
+}
+function courseHeadHTML(c) {
+  const lv = c.level;
+  const avail = availableRamos(c);
+  const lvOpts = LEVELS().map(String).map(l => {
+    const n = avail.filter(r => String(r.lv) === l && r.code !== c.code).length;
+    if (!n && String(lv) !== l) return '';
+    const extra = String(lv) === l && c.code ? (n ? ` (${n} ${n === 1 ? 'otro ramo' : 'otros ramos'})` : '') : ` (${n} ${n === 1 ? 'ramo' : 'ramos'})`;
+    return `<option value="${l}" ${String(lv) === l ? 'selected' : ''}>Nivel ${l}${extra}</option>`;
+  }).join('') + `<option value="otro" ${lv === 'otro' ? 'selected' : ''}>Otro ramo (escribir)</option>`;
+  const r = c.code ? RAMOS.find(x => x.code === c.code) : null;
+  const canLock = !!(c.code || (lv === 'otro' && String(c.name || '').trim()));
+  const locked = c.locked && canLock;
+  const sub = r
+    ? `Código ${esc(r.code)}${r.name !== r.base ? ' · ' + esc(r.base) : ''} · Nivel ${r.lv} · ${r.sct} SCT · Semestre ${esc(c.semester)}${c.historic ? ' · nota de la cartola' : ''}`
+    : lv === 'otro' ? `Semestre ${esc(c.semester)}` : 'Elige el nivel y luego el ramo';
+  const title = lv === 'otro' && !locked
+    ? `<input id="c-name" class="cname" data-k="name" value="${esc(c.name)}" placeholder="Nombre del ramo" aria-label="Nombre del curso">`
+    : `<h2 class="cname">${esc(c.name || 'Nuevo curso')}${c.example ? '<em class="tag">ejemplo</em>' : ''}</h2>`;
+  const menu = `<div class="menu-wrap">
+    <button class="icon-btn dots" data-act="menu" aria-label="Opciones del curso" aria-expanded="false" aria-haspopup="true">${ICON.dots}</button>
+    <div class="menu" role="menu" hidden>
+      ${locked ? '<button role="menuitem" data-act="unlock">Cambiar ramo o semestre</button>' : ''}
+      <button role="menuitem" class="danger" data-act="del-course">Eliminar curso</button>
+    </div>
+  </div>`;
+  const head = `<header class="d-head"><div class="d-title">${title}<div class="cname-sub">${sub}</div></div>${menu}</header>`;
+  if (locked) return head;
+  let ramo = '';
+  if (lv && lv !== 'otro') {
+    const list = avail.filter(x => x.lv === Number(lv));
+    ramo = `<label class="rowf stack"><span class="lbl">Ramo</span><select id="c-ramo" class="field" data-k="ramo"><option value="" ${c.code ? '' : 'selected'} disabled>${list.length ? `Elige un ramo del nivel ${lv}…` : 'Ya aprobaste todos los ramos de este nivel'}</option>${list.map(x => `<option value="${esc(x.code)}" ${c.code === x.code ? 'selected' : ''}>${esc(x.name)}${x.name !== x.base ? ` (${esc(x.base)})` : ''} · ${x.sct} SCT</option>`).join('')}</select></label>`;
+  }
+  const nowS = currentSem();
+  const semSel = `<select id="c-sem" class="field" data-k="semester">${(SEMESTERS.includes(c.semester) ? SEMESTERS : [c.semester, ...SEMESTERS]).map(s => { const locked = s > nowS && s !== c.semester; return `<option value="${esc(s)}" ${s === c.semester ? 'selected' : ''} ${locked ? 'disabled' : ''}>${esc(s)}${s === nowS ? ' (actual)' : locked ? ' — termina antes ' + esc(nowS) : ''}</option>`; }).join('')}</select>`;
+  return head + `<div class="group picker">
+    <label class="rowf"><span class="lbl">Semestre en que lo rindes<small>Para inscribir ramos de ${esc(nextSem(nowS))}, primero completa todas las notas de ${esc(nowS)}</small></span><span class="ctl">${semSel}</span></label>
+    <label class="rowf"><span class="lbl">Nivel de la malla</span><span class="ctl"><select id="c-lvl" class="field" data-k="level"><option value="" ${lv ? '' : 'selected'} disabled>Elige…</option>${lvOpts}</select></span></label>
+    ${ramo}
+    ${canLock ? `<label class="rowf"><span class="lbl">Confirmar ramo y semestre<small>Oculta estas listas y deja el curso fijo</small></span><input id="c-lock" type="checkbox" class="switch" data-k="lock"></label>` : ''}
+  </div>`;
+}
+function compHTML(k) {
+  const c = cur();
+  const maxDrop = Math.max(0, k.grades.length - 1);
+  const opts = Array.from({ length: maxDrop + 1 }, (_, i) => `<option value="${i}" ${i === Math.min(k.drop, maxDrop) ? 'selected' : ''}>${i === 0 ? 'ninguna' : i === 1 ? 'la peor' : 'las ' + i + ' peores'}</option>`).join('');
+  const custom = !EVAL_TYPES.includes(k.name);
+  const usedElsewhere = new Set(c.components.filter(o => o.id !== k.id).map(o => o.name));
+  const typeOpts = EVAL_TYPES.map(t => {
+    const taken = UNIQUE_TYPES.includes(t) && usedElsewhere.has(t) && t !== k.name;
+    return `<option value="${esc(t)}" ${t === k.name ? 'selected' : ''} ${taken ? 'disabled' : ''}>${esc(t)}${taken ? ' (ya está en este curso)' : ''}</option>`;
+  }).join('') + `<option value="${OTHER}" ${custom ? 'selected' : ''}>Otros</option>`;
+  const canWeight = k.name === 'Trabajo' || custom;
+  const weighted = canWeight && k.weighted;
+  const body = weighted ? `<div class="wgrades">
+      ${k.grades.map(g => {
+        const own = !PART_TYPES.includes(g.label);
+        return `<div class="wrow" id="gw-${g.id}">
+          <select id="g-t-${g.id}" data-k="g-type" data-c="${k.id}" data-g="${g.id}" aria-label="Parte">${PART_TYPES.map(t => `<option value="${esc(t)}" ${t === g.label ? 'selected' : ''}>${esc(t)}</option>`).join('')}<option value="${OTHER}" ${own ? 'selected' : ''}>Otro (escribir nombre)</option></select>
+          ${own ? `<input id="g-l-${g.id}" class="wname" data-k="g-label" data-c="${k.id}" data-g="${g.id}" value="${esc(g.label)}" placeholder="Nombre de la parte" aria-label="Nombre de la parte">` : ''}
+          <label class="wpct"><input id="g-w-${g.id}" data-k="g-w" data-c="${k.id}" data-g="${g.id}" inputmode="decimal" value="${esc(g.w ?? '')}" aria-label="Ponderación de la parte">%</label>
+          <input id="g-v-${g.id}" class="wv ${ink(g.value, c.pass)}" data-k="g-value" data-c="${k.id}" data-g="${g.id}" inputmode="decimal" placeholder="nota" value="${gtxt(g.value)}" aria-label="Nota">
+          <button class="x" data-act="del-grade" data-c="${k.id}" data-g="${g.id}" aria-label="Quitar parte">×</button>
+        </div>`;
+      }).join('')}
+      <button class="btn plain small" data-act="add-grade" data-c="${k.id}">+ Agregar parte</button>
+    </div>` : `<div class="grades">
+      ${k.grades.map(g => `<div class="gr" id="gw-${g.id}">
+        <input id="g-l-${g.id}" class="gl" data-k="g-label" data-c="${k.id}" data-g="${g.id}" value="${esc(g.label)}" aria-label="Nombre de la nota">
+        <input id="g-v-${g.id}" class="gv ${ink(g.value, c.pass)}" data-k="g-value" data-c="${k.id}" data-g="${g.id}" inputmode="decimal" placeholder="—" value="${gtxt(g.value)}" aria-label="Nota ${esc(g.label)}">
+        <button class="x" data-act="del-grade" data-c="${k.id}" data-g="${g.id}" aria-label="Quitar nota">×</button>
+      </div>`).join('')}
+      <button class="addg" data-act="add-grade" data-c="${k.id}">+ Nota</button>
+    </div>`;
+  return `<div class="comp" data-c="${k.id}">
+    <div class="comp-top">
+      <select id="k-t-${k.id}" class="type" data-k="comp-type" data-c="${k.id}" aria-label="Tipo de evaluación">${typeOpts}</select>
+      ${custom ? `<input id="k-n-${k.id}" class="field" data-k="comp-name" data-c="${k.id}" value="${esc(k.name)}" placeholder="Nombre de la evaluación" aria-label="Nombre de la evaluación">` : ''}
+      <label class="wpill" title="Peso de esta evaluación"><input id="k-w-${k.id}" data-k="comp-weight" data-c="${k.id}" inputmode="decimal" value="${esc(k.weight)}" aria-label="Peso en porcentaje">%</label>
+      <div class="menu-wrap">
+        <button class="icon-btn sm dots" data-act="menu" aria-label="Opciones de ${esc(k.name || 'la evaluación')}" aria-expanded="false" aria-haspopup="true">${ICON.dots}</button>
+        <div class="menu" role="menu" hidden><button role="menuitem" class="danger" data-act="del-comp" data-c="${k.id}">Quitar evaluación</button></div>
+      </div>
+    </div>
+    <div class="comp-opts">
+      ${weighted ? '' : `<label class="opt">Eliminar<select id="k-d-${k.id}" data-k="comp-drop" data-c="${k.id}" ${maxDrop ? '' : 'disabled'}>${opts}</select></label>`}
+      <label class="opt">Mínimo<input id="k-m-${k.id}" data-k="comp-min" data-c="${k.id}" inputmode="decimal" placeholder="—" value="${gtxt(k.min)}"></label>
+      ${canWeight ? `<label class="opt sw">Ponderar cada parte<input id="k-pw-${k.id}" type="checkbox" class="switch sm" data-k="comp-weighted" data-c="${k.id}" ${weighted ? 'checked' : ''}></label>` : ''}
+    </div>
+    ${body}
+    <div class="comp-foot" id="foot-${k.id}"></div>
+  </div>`;
+}
+function refresh() {
+  const c = cur(); if (!c) return;
+  const A = analyze(c);
+  c.components.forEach(k => {
+    k.grades.forEach(g => document.getElementById('gw-' + g.id)?.classList.toggle('dropped', A.dropped.has(g.id)));
+    const f = document.getElementById('foot-' + k.id); if (!f) return;
+    const a = A.avgs[k.id];
+    const n = k.grades.filter(g => g.value != null).length;
+    const parts = [`Promedio <b class="${ink(a?.avg, c.pass)}">${fmt(a?.avg, 2)}</b>`, `${n} de ${k.grades.length} notas`];
+    if (k.weighted) { const sw = k.grades.reduce((s, g) => s + (Number(g.w) || 0), 0); parts.push(Math.abs(sw - 100) < 0.01 ? 'las partes suman 100%' : `<span class="ink-rojo">las partes suman ${fmt(sw, sw % 1 ? 1 : 0)}%, deberían sumar 100%</span>`); }
+    else if (k.drop && k.grades.length > 1) parts.push(a?.dropped ? `${a.dropped} eliminada${a.dropped > 1 ? 's' : ''} (la${a.dropped > 1 ? 's' : ''} más baja${a.dropped > 1 ? 's' : ''})` : `se elimina${k.drop > 1 ? 'n' : ''} ${k.drop === 1 ? 'la peor' : 'las ' + k.drop + ' peores'} desde la segunda nota`);
+    if (k.min != null) { const ok = a && (c.round ? r1(a.avg) : a.avg) >= k.min - 1e-9; parts.push(`mínimo ${fmt(k.min)}${a ? (ok ? ' ✓' : ' · <span class="ink-rojo">no lo cumples</span>') : ''}`); }
+    f.innerHTML = parts.map(p => `<span>${p}</span>`).join('');
+  });
+  const ws = c.components.reduce((s, k) => s + (Number(k.weight) || 0), 0);
+  const wEl = document.getElementById('wsum');
+  if (wEl) { const okW = Math.abs(ws - 100) < 0.01; wEl.className = 'wsum' + (okW ? '' : ' bad'); wEl.textContent = okW ? 'Pesos suman 100%' : `Los pesos suman ${fmt(ws, ws % 1 ? 1 : 0)}%, deberían sumar 100%`; }
+  const R = document.getElementById('result'); if (R) R.innerHTML = resultHTML(c, A);
+  const PB = document.getElementById('pepbox'); if (PB) PB.innerHTML = pepBoxHTML(c);
+  const SB = document.getElementById('sufbox');
+  if (SB) {
+    const on = A.suf ? '1' : '0';
+    if (SB.dataset.on !== on) { SB.innerHTML = sufBoxHTML(c, A); SB.dataset.on = on; }
+    else if (A.suf) { const m = document.getElementById('suf-msg'); if (m) m.textContent = sufMsg(c, A); }
+  }
+  checkAdvance();
+  renderSide(); renderHeader();
+}
+function pepBoxHTML(c) {
+  const pn = pepNow(c); if (!pn) return '';
+  // el aviso aparece solo cuando ya hay alguna nota de PEP y ninguna llega al mínimo
+  if (pn.s === 'ok') return '';
+  if (!c.components.filter(isPep).some(k => k.grades.some(g => g.value != null))) return '';
+  const r = pepRule(c), m = fmt(r.min);
+  const rnd = v => c.round ? r1(v) : v;
+  const ks = c.components.filter(isPep);
+  const chips = ks.map(k => {
+    const a = compAvg(k, null); const done = k.grades.every(g => g.value != null);
+    const v = a ? rnd(a.avg) : null;
+    const cls = v == null || !done ? '' : (v >= r.min - 1e-9 ? 'ok' : 'no');
+    return `<span class="pchip ${cls}">${esc(k.name)}<b>${v == null ? '—' : fmt(v)}</b></span>`;
+  }).join('');
+  const pend = ks.filter(k => k.grades.some(g => g.value == null)).map(k => esc(k.name));
+  const view = {
+    ok: { tone: 'azul', icon: '✓', title: 'Requisito cumplido', text: `${esc(pn.k?.name)} tiene ${m} o más, así que ya cumpliste con esta condición.` },
+    pendiente: { tone: 'ambar', icon: '!', title: `Te falta: al menos una PEP con ${m} o más`, text: `Necesitas ${m} o más en ${pend.join(' o ')}. Si no lo logras, vas a examen de suficiencia aunque tu promedio sea suficiente.` },
+    falla: { tone: 'rojo', icon: '✕', title: 'Requisito no cumplido', text: `Ninguna PEP llegó al ${m}. Por eso debes rendir el examen de suficiencia, aunque tu promedio sea suficiente.` }
+  }[pn.s];
+  return `<div class="pepbox ${view.tone}" role="status">
+    <div class="pb-icon" aria-hidden="true">${view.icon}</div>
+    <div class="pb-main"><div class="pb-label">Requisito para aprobar · una PEP con ${m} o más</div><div class="pb-title">${view.title}</div><p>${view.text}</p></div>
+    <div class="pb-chips">${chips}</div>
+  </div>`;
+}
+function sufMsg(c, A) {
+  const v = c.suf?.value, P = fmt(c.pass);
+  if (v != null && A.end?.viaSuf) return A.end.ok ? `Sacaste ${fmt(v)}: apruebas el ramo con ${P}.` : `Sacaste ${fmt(v)}: el ramo queda reprobado.`;
+  const why = A.sufReason === 'rango' ? `tu promedio quedó entre ${fmt(sufRange(c).lo, 2)} y ${fmt(sufRange(c).hi - 0.01, 2)}` : 'no cumples un requisito, como tener una PEP con 4,0';
+  return `Debes rendirlo porque ${why}. Si sacas ${P} o más, apruebas el ramo con ${P}; si no, queda reprobado.`;
+}
+function sufBoxHTML(c, A) {
+  if (!A.suf) return '';
+  const v = c.suf?.value ?? null;
+  return `<div class="sec"><span>Examen de suficiencia</span></div>
+    <div class="comp suf-card">
+      <div class="comp-top"><span class="suf-title">Examen de suficiencia</span><span class="spacer"></span><span class="pill ambar">Obligatorio</span></div>
+      <p class="suf-txt" id="suf-msg">${esc(sufMsg(c, A))}</p>
+      <div class="grades"><div class="gr" id="gw-suf"><span class="gl-s">Nota</span><input id="suf-v" class="gv ${ink(v, c.pass)}" data-k="suf-value" inputmode="decimal" placeholder="—" value="${gtxt(v)}" aria-label="Nota del examen de suficiencia"></div></div>
+    </div>`;
+}
+function resultHTML(c, A) {
+  const st = statusOf(c, A); const ex = c.exam;
+  if (!A.total) return `<div class="verdict"><span class="pill gris">Sin notas</span><p>Agrega evaluaciones y sus notas para ver tu promedio.</p></div>`;
+  const figs = []; let sentence = ''; let curV = null, needV = null;
+  const examTxt = ex.enabled && A.examPending ? ' (incluido el examen)' : '';
+  if (A.definitive) {
+    const e = A.end; curV = e.fr;
+    const { lo, hi } = sufRange(c);
+    figs.push(`<div class="fig"><div class="l">${A.sufPending ? 'Promedio final' : 'Nota final'}</div><div class="v ${ink(e.fr, c.pass)}">${fmt(e.fr)}</div><div class="s">${e.viaSuf && e.ok ? 'aprobado por suficiencia' : c.round ? 'sin redondear ' + fmt(e.raw, 2) : 'sin redondeo'}</div></div>`);
+    if (A.suf) figs.push(`<div class="fig secondary"><div class="l">Suficiencia</div><div class="v ${ink(c.suf?.value ?? null, c.pass)}">${fmt(c.suf?.value ?? null)}</div><div class="s">${A.sufPending ? 'pendiente' : 'examen rendido'}</div></div>`);
+    if (ex.enabled) figs.push(`<div class="fig secondary"><div class="l">Presentación</div><div class="v ${ink(A.pres, c.pass)}">${fmt(A.pres, 2)}</div><div class="s">${A.exemptNow ? 'te eximiste del examen' : 'examen ' + fmt(ex.value)}</div></div>`);
+    if (A.sufPending) sentence = A.sufReason === 'rango'
+      ? `Tu promedio es ${fmt(e.raw, 2)}: quedó entre ${fmt(lo, 2)} y ${fmt(hi - 0.01, 2)}, así que debes rendir el examen de suficiencia. Si sacas ${fmt(c.pass)} o más, apruebas con ${fmt(c.pass)}.`
+      : `Tu promedio es ${fmt(e.fr)}, pero ${reqFails(c, e).join(' y ')}: debes rendir el examen de suficiencia. Si sacas ${fmt(c.pass)} o más, apruebas con ${fmt(c.pass)}.`;
+    else if (e.ok && e.viaSuf) sentence = `Aprobaste con ${fmt(c.pass)} gracias al examen de suficiencia, donde sacaste ${fmt(e.sufValue)}.`;
+    else if (e.viaSuf) sentence = `Sacaste ${fmt(e.sufValue)} en el examen de suficiencia, así que el ramo queda reprobado.`;
+    else if (e.ok) sentence = A.exemptNow ? `Te eximiste: tu presentación alcanzó el ${fmt(ex.exempt)}.` : `Aprobaste con ${fmt(e.fr)}.`;
+    else {
+      const rq = reqFails(c, e);
+      sentence = e.fr >= c.pass - 1e-9 ? `Tu nota es ${fmt(e.fr)}, pero ${rq.join(' y ')}.`
+        : `Quedaste con ${fmt(e.fr)}: te faltaron ${fmt(c.pass - e.fr)} puntos para el ${fmt(c.pass)}${rq.length ? '; además, ' + rq.join(' y ') : ''}.`;
+      if (sufOn(c) && e.raw < lo - 1e-9) sentence += ` Con un promedio bajo ${fmt(lo, 2)} no hay examen de suficiencia.`;
+    }
+  } else {
+    curV = A.pres;
+    figs.push(`<div class="fig"><div class="l">${ex.enabled ? 'Presentación a la fecha' : 'Promedio a la fecha'}</div><div class="v ${ink(A.pres, c.pass)}">${fmt(A.pres, 2)}</div><div class="s">${A.entered} de ${A.total} notas${ex.enabled ? (A.examPending ? ' · examen pendiente' : '') : ''}</div></div>`);
+    const n = A.needed;
+    if (n !== Infinity && n > 1) needV = n;
+    figs.push(`<div class="fig secondary"><div class="l">Necesitas</div><div class="v">${n === Infinity ? '> 7,0' : n <= 1 ? '1,0' : fmt(n)}</div><div class="s">en cada nota pendiente</div></div>`);
+    if (n <= 1) sentence = `Aunque saques 1,0 en lo que queda${examTxt}, terminas con ${fmt(A.at.fr)} y apruebas.`;
+    else if (n === Infinity && A.sufMin != null && A.sufMin !== Infinity) { const rq = reqFails(c, A.at); sentence = `Ni con 7,0 en todo lo pendiente${examTxt} apruebas directo: quedarías con ${fmt(A.at.fr)}${rq.length && A.at.fr >= c.pass - 1e-9 ? ', pero ' + rq.join(' y ') : ''}. Irías a examen de suficiencia; para llegar a ${fmt(sufRange(c).lo, 2)} necesitas ${A.sufMin <= 1 ? 'cualquier nota' : fmt(A.sufMin)} en cada nota pendiente.`; }
+    else if (n === Infinity) { const rq = reqFails(c, A.at); sentence = rq.length && A.at.fr >= c.pass - 1e-9 ? `Aun con 7,0 en todo lo pendiente no apruebas: ${rq.join(' y ')}.` : `Ni con 7,0 en todo lo pendiente${examTxt} llegas al ${fmt(c.pass)}: quedarías con ${fmt(A.at.fr)}.`; }
+    else sentence = `Con ${fmt(n)} en cada nota pendiente${examTxt} terminas con ${fmt(A.at.fr)}${A.at.exempt ? ' y te eximes' : ''}.`;
+  }
+  let exLine = '';
+  if (ex.enabled && ex.exempt != null && !A.definitive && A.exNeeded != null) {
+    exLine = A.exNeeded === Infinity ? `<span class="hint">Eximirte (${fmt(ex.exempt)}) ya no es posible este semestre.</span>`
+      : `<span class="hint">Para eximirte (${fmt(ex.exempt)}) necesitas ${A.exNeeded <= 1 ? 'cualquier nota' : fmt(A.exNeeded)} en cada nota de presentación pendiente.</span>`;
+  }
+  const pn = pepNow(c); let pepLine = '';
+  if (pn) {
+    const m = fmt(pepRule(c).min);
+    pepLine = pn.s === 'ok' ? `<span class="hint">Requisito PEP cumplido: ${esc(pn.k.name)} tiene ${m} o más.</span>`
+      : pn.s === 'pendiente' ? `<span class="hint">Requisito PEP pendiente: necesitas ${m} o más en al menos una PEP.</span>`
+      : `<span class="hint ink-rojo">Requisito PEP no cumplido: ninguna PEP llegó al ${m}.</span>`;
+  }
+  const labels = [1, 2, 3, 5, 6, 7].filter(v => Math.abs(v - c.pass) > .45).map(v => `<span class="lab" style="left:${pct(v)}">${v},0</span>`).join('');
+  return `<div class="hero-figs">${figs.join('')}</div><div class="verdict"><span class="pill ${st.tone}">${st.text}</span><p>${sentence}</p>${exLine}</div>
+    <div class="scale" aria-hidden="true">
+      <div class="track"><div class="lo" style="width:${pct(c.pass)}"></div><div class="hi"></div></div>
+      <div class="tick" style="left:${pct(c.pass)}"></div>
+      ${needV != null ? `<div class="mk need" style="left:${pct(needV)}" title="Necesitas ${fmt(needV)}"></div>` : ''}
+      ${curV != null ? `<div class="mk cur" style="left:${pct(curV)}" title="${fmt(curV, 2)}"></div>` : ''}
+      ${labels}<span class="lab pass" style="left:${pct(c.pass)}">${fmt(c.pass)}</span>
+    </div>`;
+}
+
+/* ---------- eventos ---------- */
+function findComp(c, id) { return c.components.find(k => k.id === id); }
+app.addEventListener('input', e => {
+  if (e.target.dataset.s) { settingsInput(e.target); return; }
+  const el = e.target, k = el.dataset.k; if (!k) return;
+  const c = cur(); if (!c) return;
+  const kp = el.dataset.c ? findComp(c, el.dataset.c) : null;
+  const g = kp && el.dataset.g ? kp.grades.find(x => x.id === el.dataset.g) : null;
+  const bad = ok => el.classList.toggle('bad', !ok);
+  switch (k) {
+    case 'name': c.name = el.value; break;
+    case 'lock': c.locked = el.checked; scheduleSave(); renderMain(); return;
+    case 'level': {
+      const v = el.value;
+      if (v === 'otro') { c.level = 'otro'; c.code = null; }
+      else { c.level = Number(v); c.code = null; c.name = ''; }
+      scheduleSave(); renderMain(); renderSide();
+      setTimeout(() => document.getElementById(v === 'otro' ? 'c-name' : 'c-ramo')?.focus(), 0);
+      return;
+    }
+    case 'ramo': {
+      const r = RAMOS.find(x => x.code === el.value); if (!r) return;
+      c.code = r.code; c.name = r.name; c.level = r.lv; c.credits = r.sct;
+      scheduleSave(); renderMain();
+      setTimeout(() => document.getElementById('c-ramo')?.focus(), 0);
+      return;
+    }
+    case 'semester': c.semester = el.value; openSem(el.value); scheduleSave(); renderMain(); setTimeout(() => document.getElementById('c-sem')?.focus(), 0); return;
+    case 'comp-type': {
+      const custom = el.value === OTHER;
+      kp.name = custom ? '' : el.value;
+      if (!custom && kp.name !== 'Trabajo') kp.weighted = false;
+      scheduleSave(); renderMain();
+      setTimeout(() => document.getElementById((custom ? 'k-n-' : 'k-t-') + kp.id)?.focus(), 0);
+      return;
+    }
+    case 'credits': { const p = parseNum(el.value, 0, 60); bad(p.ok); if (p.ok) c.credits = p.v ?? 0; break; }
+    case 'pass': { const p = parseGrade(el.value); bad(p.ok && p.v != null); if (p.v != null) { c.pass = p.v; renderInk(c); } break; }
+    case 'round': c.round = el.checked; break;
+    case 'pep-on': c.pepReq = Object.assign(pepRule(c), { enabled: el.checked }); const pm = document.getElementById('c-pepmin'); if (pm) pm.disabled = !el.checked; break;
+    case 'pep-min': { const p = parseGrade(el.value); bad(p.ok && p.v != null); if (p.v != null) c.pepReq = Object.assign(pepRule(c), { min: p.v }); break; }
+    case 'comp-name': kp.name = el.value; break;
+    case 'comp-weighted': {
+      kp.weighted = el.checked;
+      if (el.checked) {
+        kp.drop = 0;
+        if (kp.grades.every(g => g.value == null) && kp.grades.length <= 1) {
+          kp.grades = [Object.assign(grade('Entrega escrita'), { w: 50 }), Object.assign(grade('Presentación grupal'), { w: 25 }), Object.assign(grade('Presentación individual'), { w: 25 })];
+        } else if (kp.grades.every(g => g.w == null)) {
+          const each = Math.round(100 / kp.grades.length * 10) / 10; kp.grades.forEach(g => g.w = each);
+        }
+      }
+      scheduleSave(); renderMain(); return;
+    }
+    case 'g-type': {
+      const own = el.value === OTHER; g.label = own ? '' : el.value;
+      scheduleSave(); renderMain();
+      setTimeout(() => document.getElementById((own ? 'g-l-' : 'g-t-') + g.id)?.focus(), 0);
+      return;
+    }
+    case 'g-w': { const v = clampPct(el, 100 - kp.grades.reduce((s, o) => o === g ? s : s + (Number(o.w) || 0), 0)); if (v !== undefined) g.w = v; break; }
+    case 'comp-weight': { const v = clampPct(el, 100 - c.components.reduce((s, o) => o === kp ? s : s + (Number(o.weight) || 0), 0)); if (v !== undefined) kp.weight = v; break; }
+    case 'comp-drop': kp.drop = Number(el.value) || 0; break;
+    case 'comp-min': { const p = parseGrade(el.value); bad(p.ok); if (p.ok) kp.min = p.v; break; }
+    case 'g-label': g.label = el.value; break;
+    case 'g-value': { const p = parseGrade(el.value); bad(p.ok); g.value = p.ok ? p.v : null; el.classList.toggle('ink-azul', g.value != null && g.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', g.value != null && g.value < c.pass - 1e-9); break; }
+    case 'exam-on': c.exam.enabled = el.checked; scheduleSave(); renderMain(); return;
+    case 'exam-weight': { const v = clampPct(el, 100); if (v !== undefined) c.exam.weight = v; break; }
+    case 'exam-exempt': { const p = parseGrade(el.value); bad(p.ok); if (p.ok) c.exam.exempt = p.v; break; }
+    case 'suf-value': { const p = parseGrade(el.value); bad(p.ok); c.suf = { value: p.ok ? p.v : null }; el.classList.toggle('ink-azul', c.suf.value != null && c.suf.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', c.suf.value != null && c.suf.value < c.pass - 1e-9); break; }
+    case 'suf-rule': c.sufRule = el.checked; scheduleSave(); renderMain(); return;
+    case 'exam-value': { const p = parseGrade(el.value); bad(p.ok); c.exam.value = p.ok ? p.v : null; el.classList.toggle('ink-azul', c.exam.value != null && c.exam.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', c.exam.value != null && c.exam.value < c.pass - 1e-9); break; }
+  }
+  if (k === 'exam-weight') { const h = el.closest('.exam')?.querySelector('.hint'); if (h) h.textContent = `Nota final = presentación × ${fmt(100 - (Number(c.exam.weight) || 0), 0)}% + examen × ${fmt(Number(c.exam.weight) || 0, 0)}%. Si fijas una nota de eximición y tu presentación la alcanza, la presentación pasa a ser tu nota final.`; }
+  refresh(); scheduleSave();
+});
+function renderInk(c) {
+  c.components.forEach(k => k.grades.forEach(g => { const el = document.getElementById('g-v-' + g.id); if (el) { el.classList.toggle('ink-azul', g.value != null && g.value >= c.pass - 1e-9); el.classList.toggle('ink-rojo', g.value != null && g.value < c.pass - 1e-9); } }));
+}
+// límites: ninguna nota sobre 7,0 y ningún conjunto de porcentajes sobre 100%
+const GRADE_KEYS = ['g-value', 'exam-value', 'comp-min', 'exam-exempt', 'pass', 'pep-min', 'suf-value'];
+let toastT = null;
+function toast(msg) { const t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2400); }
+const numTxt = v => String(Math.round(v * 10) / 10).replace('.', ',');
+function overSeven(s) {
+  s = String(s ?? '').trim().replace(',', '.'); if (!s) return false;
+  let n = Number(s); if (!isFinite(n)) return false;
+  if (Number.isInteger(n) && n >= 10 && n <= 70) n = n / 10;
+  return n > 7;
+}
+// devuelve el valor ya limitado, o undefined si no es un número válido
+function clampPct(el, max) {
+  const s = String(el.value).trim().replace(',', '.');
+  if (!s) { el.classList.remove('bad'); return 0; }
+  const n = Number(s);
+  if (!isFinite(n) || n < 0) { el.classList.add('bad'); return undefined; }
+  el.classList.remove('bad');
+  max = Math.max(0, Math.round(max * 10) / 10);
+  if (n > max + 1e-9) {
+    el.value = numTxt(max);
+    toast(max <= 0 ? 'Ya se ocupó el 100%. Baja otro porcentaje primero.' : `No puede pasar de 100%: quedaba ${numTxt(max)}%.`);
+    return max;
+  }
+  return n;
+}
+// guarda el último valor válido de cada campo de nota para volver a él si se pasa de 7,0
+app.addEventListener('focusin', e => { const el = e.target; if (GRADE_KEYS.includes(el.dataset?.k) || el.id === 'con-nota') el.dataset.prev = el.value; });
+// las notas que se escriben directo en el curso también quedan en el registro de la consola
+const LOGGED_KEYS = ['g-value', 'exam-value', 'suf-value'];
+function gradeRef(el) {
+  const c = cur(); if (!c) return null;
+  const k = el.dataset.k;
+  if (k === 'exam-value') return { c, gid: 'exam', label: 'Examen', value: c.exam.value };
+  if (k === 'suf-value') return { c, gid: 'suf', label: 'Examen de suficiencia', value: c.suf?.value ?? null };
+  const kp = findComp(c, el.dataset.c); const g = kp?.grades.find(x => x.id === el.dataset.g); if (!g) return null;
+  const name = kp.name || 'Evaluación';
+  return { c, gid: g.id, label: kp.grades.length === 1 && !kp.weighted ? name : `${name} · ${g.label || 'nota'}`, value: g.value };
+}
+app.addEventListener('focusin', e => { const el = e.target; if (!LOGGED_KEYS.includes(el.dataset?.k)) return; const r = gradeRef(el); el.dataset.orig = JSON.stringify(r ? r.value : null); });
+app.addEventListener('change', e => {
+  const el = e.target; if (!LOGGED_KEYS.includes(el.dataset?.k) || el.dataset.orig === undefined) return;
+  const r = gradeRef(el); if (!r) return;
+  const prev = JSON.parse(el.dataset.orig);
+  if (r.value === prev) return;
+  const entry = { id: uid(), t: Date.now(), cid: r.c.id, gid: r.gid, course: r.c.name || 'Nuevo curso', eval: r.label, v: r.value, prev, src: 'curso' };
+  state.meta.log = [entry, ...(Array.isArray(state.meta.log) ? state.meta.log : [])].slice(0, 60);
+  el.dataset.orig = JSON.stringify(r.value);
+  scheduleSave();
+});
+app.addEventListener('input', e => {
+  const el = e.target; if (!(GRADE_KEYS.includes(el.dataset?.k) || el.id === 'con-nota')) return;
+  if (overSeven(el.value)) { el.value = el.dataset.prev ?? ''; toast('La nota máxima es 7,0.'); }
+  else el.dataset.prev = el.value;
+}, true);
+app.addEventListener('focusout', e => {
+  const el = e.target; const k = el.dataset?.k;
+  if (!['g-value', 'pass', 'comp-min', 'exam-exempt', 'exam-value', 'pep-min', 'suf-value'].includes(k)) return;
+  const p = parseGrade(el.value); if (p.ok && p.v != null) el.value = gtxt(p.v);
+});
+let armTimer = null;
+document.getElementById('gear').addEventListener('click', () => { if (!ready) return; closeMenus(); state.view = state.view === 'settings' ? null : 'settings'; render(); window.scrollTo({ top: 0 }); });
+document.getElementById('back').addEventListener('click', () => { state.pane = 'list'; applyPane(); renderSide(); requestAnimationFrame(() => window.scrollTo({ top: listScroll })); });
+const topbar = document.getElementById('topbar');
+document.getElementById('sidebtn').addEventListener('click', () => {
+  focusMode = !focusMode;
+  try { localStorage.setItem('libreta-enfoque', focusMode ? '1' : '0'); } catch (_) {}
+  closeMenus(); applyPane();
+});
+topbar.addEventListener('click', e => {
+  const t = e.target.closest('[data-view]'); if (!t || !ready) return;
+  const v = t.dataset.view || null; if (state.view === v) return;
+  closeMenus(); state.view = v; render(); window.scrollTo({ top: 0 });
+  if (v === 'console' && !isNarrow()) document.getElementById('con-nota')?.focus();
+});
+app.addEventListener('change', e => {
+  if (e.target.id === 'bk-file') {
+    const f = e.target.files?.[0]; e.target.value = ''; if (!f) return;
+    f.text().then(t => { const d = parseBackup(t); if (!d) { toast('Ese archivo no es una copia de Registro de Notas.'); return; } bk.pending = d; render(); });
+    return;
+  }
+  if (e.target.id === 'sort-sel') { sortMode = e.target.value; try { localStorage.setItem('libreta-orden', sortMode); } catch (_) {} renderSide(); document.getElementById('sort-sel')?.focus(); return; }
+  if (e.target.id === 'imp-photo-in' || e.target.id === 'imp-file-in') { const files = [...(e.target.files || [])]; e.target.value = ''; runImport(state.tab || 'malla', e.target.id === 'imp-photo-in' ? 'photo' : 'file', files); return; }
+  if (e.target.id === 'imp-remove') { state.imp.removeMissing = e.target.checked; render(); return; }
+  if (e.target.id === 'con-ramo') { state.con.cid = e.target.value; state.con.key = null; render(); }
+  else if (e.target.id === 'con-eval') { state.con.key = e.target.value; conHint(); }
+});
+app.addEventListener('input', e => { if (e.target.id === 'con-nota') conHint(); });
+app.addEventListener('submit', e => {
+  if (e.target.id === 'con-form') { e.preventDefault(); conSubmit(); }
+  else if (e.target.id === 'login-form') { e.preventDefault(); doLogin(e.target); }
+});
+window.addEventListener('scroll', () => topbar.classList.toggle('scrolled', window.scrollY > 4), { passive: true });
+app.addEventListener('toggle', e => { const d = e.target; if (!d.matches?.('details.lvl')) return; const l = Number(d.dataset.lv); d.open ? openLvls.add(l) : openLvls.delete(l); }, true);
+function closeMenus() { document.querySelectorAll('.menu').forEach(m => m.hidden = true); document.querySelectorAll('.dots').forEach(d => d.setAttribute('aria-expanded', 'false')); }
+document.addEventListener('click', e => { if (!e.target.closest('.menu-wrap')) closeMenus(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenus(); });
+app.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act; const c = cur();
+  switch (act) {
+    case 'menu': {
+      const m = b.parentElement.querySelector('.menu'); const open = m.hidden;
+      closeMenus(); m.hidden = !open; b.setAttribute('aria-expanded', String(open));
+      if (open) m.querySelector('button')?.focus();
+      return;
+    }
+    case 'unlock': c.locked = false; renderMain(); scheduleSave(); setTimeout(() => document.getElementById('c-ramo')?.focus(), 0); return;
+    case 'close-settings': state.view = null; render(); window.scrollTo({ top: 0 }); return;
+    case 'imp-photo': document.getElementById('imp-photo-in')?.click(); return;
+    case 'imp-file': document.getElementById('imp-file-in')?.click(); return;
+    case 'imp-stop': state.imp?.ctl?.abort(); return;
+    case 'imp-cancel': state.imp = null; render(); return;
+    case 'imp-apply': if (state.imp?.tab === 'malla') applyMalla(); else applyElec(); return;
+    case 'toggle-past': showPast = !showPast; if (showPast) justOpened = '__past'; try { localStorage.setItem('libreta-ver-anteriores', showPast ? '1' : '0'); } catch (_) {} renderSide(); return;
+    case 'set-theme': state.meta.look = Object.assign({}, state.meta.look, { theme: b.dataset.theme }); render(); scheduleSave(); return;
+    case 'set-mode': state.meta.look = Object.assign({}, state.meta.look, { mode: b.dataset.mode }); render(); scheduleSave(); return;
+    case 'bk-export': bkExport(); return;
+    case 'bk-import': document.getElementById('bk-file')?.click(); return;
+    case 'bk-cancel': bk.pending = null; render(); return;
+    case 'bk-apply':
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro? Toca de nuevo'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.textContent = 'Reemplazar mis datos'; } }, 4000); return; }
+      useBackup(bk.pending); bk.pending = null; render(); scheduleSave(); toast('Datos cargados desde la copia.'); return;
+    case 'bk-pick': bkPick(); return;
+    case 'bk-resume': bkResume(); return;
+    case 'bk-stop': bk.handle = null; bk.perm = null; bk.newer = null; kvSet('archivo', null); setSave('', 'Guardado en este navegador'); render(); return;
+    case 'bk-use-newer': useBackup(bk.newer); bk.newer = null; saveLocal(); render(); toast('Cargué la versión del archivo.'); return;
+    case 'bk-keep': bk.newer = null; bkWrite(); render(); return;
+    case 'set-mencion': {
+      const m = b.dataset.m; if (!MALLAS[m] || state.meta.mencion === m) return;
+      const risky = b.dataset.arm && (Array.isArray(state.meta.malla) || state.courses.length);
+      if (risky && !b.classList.contains('armed')) {
+        document.querySelectorAll('.mencion-card.armed').forEach(x => x.classList.remove('armed'));
+        b.classList.add('armed'); b.querySelector('.mc-s').textContent = 'Toca de nuevo para cambiar';
+        setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); const st = mallaStats(m); b.querySelector('.mc-s').textContent = `${st.n} ramos · ${st.sct} SCT`; } }, 4000);
+        return;
+      }
+      state.meta.mencion = m; delete state.meta.malla; rebuildRamos();
+      state.courses.forEach(c => c.code && syncCourses(c.code));
+      render(); scheduleSave(); toast(`Malla de ${MALLAS[m].label} cargada.`); return;
+    }
+    case 'lg-mode': { const L = state.login || {}; state.login = { mode: L.mode === 'crear' ? 'entrar' : 'crear', user: L.user || '', msg: '' }; render(); return; }
+    case 'rm-sync': if (remote.dirty) remoteSave(); else remoteRefresh(true); toast('Sincronizando con Drive…'); return;
+    case 'rm-logout': logout(''); return;
+    case 'close-all-sems': openSems.clear(); saveOpen(); renderSide(); return;
+    case 'go-notes': state.view = null; render(); window.scrollTo({ top: 0 }); return;
+    case 'con-undo': conUndo(b.dataset.id); return;
+    case 'con-redo': conRedo(b.dataset.id); return;
+    case 'con-trash': state.con.showTrash = !state.con.showTrash; state.con.trashOpened = state.con.showTrash; render(); return;
+    case 'con-forget': state.meta.log = (state.meta.log || []).filter(x => x.id !== b.dataset.id); scheduleSave(); render(); return;
+    case 'con-empty':
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro? Toca de nuevo'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.textContent = 'Vaciar papelera'; } }, 4000); return; }
+      state.meta.log = (state.meta.log || []).filter(x => !x.undone); state.con.showTrash = false; scheduleSave(); render(); toast('Papelera vaciada.'); return;
+    case 'con-open': {
+      const e = (state.meta.log || []).find(x => x.id === b.dataset.id); if (!e) return;
+      const crs = state.courses.find(x => x.id === e.cid); if (!crs) return;
+      state.view = null; state.sel = crs.id; state.pane = 'detail'; openSem(crs.semester); if (crs.semester < currentSem()) showPast = true; animatePane = isNarrow();
+      render(); window.scrollTo({ top: 0 }); return;
+    }
+    case 'set-tab': state.tab = b.dataset.tab; render(); return;
+    case 'add-ramo': case 'add-level': {
+      const m = editableMalla();
+      const lv = act === 'add-level' ? Math.max(0, ...m.map(r => Number(r.lv))) + 1 : Number(b.dataset.lv);
+      const row = { id: uid(), lv, code: 'NUEVO-' + uid().slice(0, 4).toUpperCase(), name: 'Nuevo ramo', sct: 5 };
+      m.push(row); openLvls.add(lv); render(); scheduleSave();
+      setTimeout(() => { const i = document.getElementById('m-n-' + row.id); i?.focus(); i?.select(); }, 0);
+      return;
+    }
+    case 'del-ramo': {
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Quitar'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.textContent = '×'; } }, 4000); return; }
+      state.meta.malla = editableMalla().filter(r => r.id !== b.dataset.row); render(); scheduleSave(); return;
+    }
+    case 'reset-malla': {
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro? Toca de nuevo'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.textContent = 'Restaurar malla original'; } }, 4000); return; }
+      delete state.meta.malla; rebuildRamos(); state.courses.forEach(c => c.code && syncCourses(c.code)); render(); scheduleSave(); return;
+    }
+    case 'toggle-failed': showFailed = !showFailed; try { localStorage.setItem('libreta-ver-reprobados', showFailed ? '1' : '0'); } catch (_) {} renderSide(); return;
+    case 'toggle-sem': { const s = b.dataset.sem; if (openSems.has(s)) openSems.delete(s); else { openSems.add(s); justOpened = s; } saveOpen(); renderSide(); return; }
+    case 'select': {
+      const narrow = isNarrow();
+      if (narrow) listScroll = window.scrollY;
+      state.sel = b.dataset.id; state.pane = 'detail'; animatePane = narrow;
+      renderSide(); renderMain(); applyPane();
+      if (narrow) window.scrollTo({ top: 0 });
+      return;
+    }
+    case 'new-course': { const n = normalize(newCourse(currentSem())); state.courses.push(n); state.sel = n.id; openSem(n.semester); if (isNarrow()) listScroll = window.scrollY; state.pane = 'detail'; animatePane = isNarrow(); render(); if (isNarrow()) window.scrollTo({ top: 0 }); scheduleSave(); setTimeout(() => document.getElementById('c-lvl')?.focus(), 0); return; }
+    case 'load-example': { const ex = exampleCourses().map(normalize); state.courses.push(...ex); state.sel = ex[0].id; openSem(ex[0].semester); render(); scheduleSave(); return; }
+    case 'clear-examples': state.courses = state.courses.filter(x => !x.example); render(); scheduleSave(); return;
+    case 'add-comp': {
+      const used = new Set(c.components.map(k => k.name));
+      const name = EVAL_TYPES.find(t => !used.has(t)) || 'Trabajo';
+      c.components.push(comp(name, 0, ['Nota'])); renderMain(); scheduleSave(); return;
+    }
+    case 'del-comp':
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro? Toca de nuevo'; setTimeout(() => { if (b.isConnected) { b.classList.remove('armed'); b.textContent = 'Quitar evaluación'; } }, 4000); return; }
+      c.components = c.components.filter(k => k.id !== b.dataset.c); closeMenus(); renderMain(); scheduleSave(); return;
+    case 'add-grade': { const k = findComp(c, b.dataset.c);
+      if (k.weighted) {
+        const used = new Set(k.grades.map(g => g.label));
+        const rest = Math.max(0, 100 - k.grades.reduce((s, g) => s + (Number(g.w) || 0), 0));
+        k.grades.push(Object.assign(grade(PART_TYPES.find(t => !used.has(t)) || ''), { w: rest }));
+      } else k.grades.push(grade('N' + (k.grades.length + 1))); renderMain(); scheduleSave(); setTimeout(() => document.getElementById('g-v-' + k.grades.at(-1).id)?.focus(), 0); return; }
+    case 'del-grade': { const k = findComp(c, b.dataset.c); k.grades = k.grades.filter(g => g.id !== b.dataset.g); k.drop = Math.min(k.drop, Math.max(0, k.grades.length - 1)); renderMain(); scheduleSave(); return; }
+    case 'del-course':
+      if (!b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = '¿Seguro? Toca de nuevo'; clearTimeout(armTimer); armTimer = setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Eliminar curso'; }, 4000); return; }
+      state.courses = state.courses.filter(x => x.id !== c.id); state.sel = null; state.pane = 'list'; render(); scheduleSave(); return;
+  }
+});
+
+/* ---------- guardado ---------- */
+const saveEl = document.getElementById('save');
+function setSave(s, text) { saveEl.dataset.s = s; saveEl.textContent = text; saveEl.title = text; }
+const payload = () => ({ courses: state.courses, meta: state.meta });
+const payloadJSON = () => JSON.stringify(payload());
+function saveLocal() { try { localStorage.setItem(lsKey(), API && remote.user ? JSON.stringify(Object.assign(payload(), { version: remote.version, dirty: remote.dirty })) : payloadJSON()); } catch (_) {} }
+function loadLocal() {
+  try {
+    const v = JSON.parse(localStorage.getItem(lsKey()) || 'null');
+    if (Array.isArray(v)) return { courses: v, meta: {} };
+    return v && Array.isArray(v.courses) ? { courses: v.courses, meta: v.meta || {}, version: v.version || 0, dirty: !!v.dirty } : null;
+  } catch (_) { return null; }
+}
+
+/* ---------- mención: quienes ya tenían cursos quedan en Administración ---------- */
+function maybeMigrate() {
+  if (state.meta.mencion || !state.courses.length) return;
+  state.meta.mencion = 'admin'; render(); scheduleSave();
+}
+
+let docRef = null, saving = false, again = false, saveTimer = null, lastJSON = '';
+function scheduleSave() {
+  state.meta.savedAt = Date.now();
+  if (API && remote.user) remote.dirty = true;
+  saveLocal();
+  bkSchedule();
+  if (API && remote.user) remoteSchedule();
+  if (!docRef) return;
+  setSave('busy', 'Guardando…');
+  clearTimeout(saveTimer); saveTimer = setTimeout(flush, 700);
+}
+async function flush() {
+  saveTimer = null;
+  if (!docRef) return;
+  if (saving) { again = true; return; }
+  const json = payloadJSON();
+  if (json === lastJSON) { setSave('ok', 'Guardado en tu cuenta'); return; }
+  saving = true;
+  const body = Object.assign(JSON.parse(json), { updatedAt: new Date().toISOString(), v: 1 });
+  try {
+    await docRef.set(body); lastJSON = json; setSave('ok', 'Guardado en tu cuenta');
+  } catch (err) {
+    if (err?.code === 'unavailable') {
+      await new Promise(r => setTimeout(r, 800 + Math.random() * 800));
+      try { await docRef.set(body); lastJSON = json; setSave('ok', 'Guardado en tu cuenta'); }
+      catch (_) { setSave('err', 'No se pudo guardar en la nube; quedó en este navegador'); }
+    } else if (err?.code === 'quota_exceeded') {
+      setSave('err', 'Se llenó el espacio de guardado; borra cursos antiguos');
+    } else {
+      setSave('err', 'Guardado solo en este navegador'); docRef = null;
+    }
+  }
+  saving = false;
+  if (again) { again = false; flush(); }
+}
+
+async function init() {
+  if (API_SET) { if (API) return remoteInit(); ready = true; return render(); }
+  const local = loadLocal();
+  if (local) { state.meta = local.meta; rebuildRamos(); state.courses = local.courses.map(normalize); }
+  const localOnly = () => { ready = true; setSave('', 'Guardado en este navegador'); render(); maybeMigrate(); };
+  const C = window.claude;
+  if (!C || typeof C.use !== 'function') return localOnly();
+  let db = null, user = null;
+  try { [db, user] = await Promise.all([C.use('db'), C.use('user')]); } catch (_) {}
+  let id = null; try { id = user ? await user.id() : null; } catch (_) {}
+  if (!db || !id) return localOnly();
+  try { docRef = db.doc('data/users/' + id + '/notas'); } catch (_) { docRef = null; }
+  if (!docRef) return localOnly();
+  let confirmed = false;
+  const timer = setTimeout(() => {
+    if (!ready) { ready = true; render(); }
+    if (!confirmed) setSave('err', 'Sin conexión con tu cuenta; usando copia de este navegador');
+  }, 10000);
+  docRef.onSnapshot(snap => {
+    const md = snap.metadata || {};
+    if (md.hasPendingWrites) return;
+    if (snap.exists) {
+      const d = snap.data() || {};
+      const incoming = { courses: Array.isArray(d.courses) ? d.courses : [], meta: d.meta && typeof d.meta === 'object' ? d.meta : {} };
+      const json = JSON.stringify(incoming);
+      if (!saving && !saveTimer && json !== payloadJSON()) {
+        const fresh = JSON.parse(json);
+        state.meta = fresh.meta; rebuildRamos(); state.courses = fresh.courses.map(normalize); lastJSON = json; saveLocal();
+        if (ready) render();
+      } else if (json === payloadJSON()) lastJSON = json;
+    } else if (!md.fromCache && state.courses.length && !confirmed) {
+      // primera vez en la nube: subir lo que había en este navegador
+      setTimeout(scheduleSave, 0);
+    }
+    const firstConfirm = !md.fromCache && !confirmed;
+    if (!md.fromCache) { confirmed = true; clearTimeout(timer); if (saveEl.dataset.s !== 'busy') setSave('ok', 'Guardado en tu cuenta'); }
+    if (!ready) { ready = true; render(); }
+    if (firstConfirm) maybeMigrate();
+  }, err => {
+    clearTimeout(timer); docRef = null;
+    setSave('err', 'Guardado solo en este navegador');
+    if (!ready) { ready = true; render(); }
+  });
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (state.view === 'settings' && state.tab === 'temas') render(); });
+render();
+init();
+initSampler();
+bkInit();
+})();
+</script>
+
+</body>
+</html>
